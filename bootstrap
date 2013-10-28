@@ -13,5 +13,5 @@ fi
 
 # Patch the dynamicoverlay module in VLC.
 cd vlc
-git am ../vlc_patches/dashp2p.patch
+git am ../vlc-patches/dashp2p.patch
 cd ..
