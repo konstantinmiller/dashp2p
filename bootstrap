@@ -1,0 +1,17 @@
+#!/bin/bash
+
+echo "========== Initializing and updating submodules..."
+git submodule init
+git submodule update
+
+# There is probably a bug in VLC, due to recent changes in GIT submodule handling.
+# This workaround should help.
+if [ -f ./vlc/.git ] ; then
+    rm ./vlc/.git
+    ln -s ../.git/modules/vlc ./vlc/.git
+fi
+
+# Patch the dynamicoverlay module in VLC.
+cd vlc
+git am ../vlc_patches/dashp2p.patch
+cd ..
