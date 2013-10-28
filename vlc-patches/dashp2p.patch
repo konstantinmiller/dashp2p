@@ -1,0 +1,221 @@
+From 703097dc6f563c5c26a0456759d2a2bef25bd085 Mon Sep 17 00:00:00 2001
+From: Konstantin Miller <konstantin.miller@gmail.com>
+Date: Mon, 28 Oct 2013 16:01:31 +0100
+Subject: [PATCH 1/2] Overlay module fixes.
+
+---
+ modules/video_filter/dynamicoverlay/dynamicoverlay.c          | 6 ++++--
+ modules/video_filter/dynamicoverlay/dynamicoverlay_commands.c | 7 ++++++-
+ 2 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/modules/video_filter/dynamicoverlay/dynamicoverlay.c b/modules/video_filter/dynamicoverlay/dynamicoverlay.c
+index 789c272..bb20bb3 100644
+--- a/modules/video_filter/dynamicoverlay/dynamicoverlay.c
++++ b/modules/video_filter/dynamicoverlay/dynamicoverlay.c
+@@ -242,7 +242,8 @@ static subpicture_t *Filter( filter_t *p_filter, mtime_t date )
+         *p_end = '\0';
+         p_cmd = BufferGetToken( &p_sys->input );
+ 
+-        msg_Info( p_filter, "Search command: %s", p_cmd );
++        //msg_Info( p_filter, "Search command: %s", p_cmd ); // KMI
++        msg_Dbg( p_filter, "Search command: %s", p_cmd );    // KMI msg_Info -> msg_Dbg
+         for( i_index = 0; i_index < p_sys->i_commands; i_index++ )
+         {
+             p_cur = p_sys->pp_commands[i_index];
+@@ -262,7 +263,8 @@ static subpicture_t *Filter( filter_t *p_filter, mtime_t date )
+         }
+         else
+         {
+-            msg_Info( p_filter, "Got valid command: %s", p_cmd );
++            //msg_Info( p_filter, "Got valid command: %s", p_cmd ); // KMI
++            msg_Dbg( p_filter, "Got valid command: %s", p_cmd );    // KMI changed from msg_Info to msg_Dbg
+ 
+             command_t *p_cmddesc = malloc( sizeof( command_t ) );
+             if( !p_cmddesc )
+diff --git a/modules/video_filter/dynamicoverlay/dynamicoverlay_commands.c b/modules/video_filter/dynamicoverlay/dynamicoverlay_commands.c
+index 855b9d6..93a18fe 100644
+--- a/modules/video_filter/dynamicoverlay/dynamicoverlay_commands.c
++++ b/modules/video_filter/dynamicoverlay/dynamicoverlay_commands.c
+@@ -57,6 +57,10 @@ overlay_t *OverlayCreate( void )
+     video_format_Setup( &p_ovl->format, VLC_FOURCC( '\0','\0','\0','\0') , 0, 0,
+                         1, 1 );
+     p_ovl->p_fontstyle = text_style_New();
++    const char* monospaceFontName = "Monospace";                                     // KMI
++    p_ovl->p_fontstyle->psz_fontname = (char*)malloc(strlen(monospaceFontName) + 1); // KMI
++    strcpy(p_ovl->p_fontstyle->psz_fontname, monospaceFontName);                     // KMI
++    p_ovl->p_fontstyle->i_font_size = 20;                                            // KMI
+     p_ovl->data.p_text = NULL;
+ 
+     return p_ovl;
+@@ -463,7 +467,8 @@ static int exec_DataSharedMem( filter_t *p_filter,
+         }
+ 
+         video_format_Setup( &p_ovl->format, VLC_CODEC_TEXT,
+-                            0, 0, 0, 1 );
++                            0, 0, 1, 1 );   // KMI (0,0,0,1) -> (0,0,1,1)
++                            //0, 0, 0, 1 ); // KMI
+ 
+         p_data = shmat( p_params->i_shmid, NULL, SHM_RDONLY );
+         if( p_data == NULL )
+-- 
+1.8.1.2
+
+
+From 568cf990d82e855be9f0328470c6c611810b09ff Mon Sep 17 00:00:00 2001
+From: Konstantin Miller <konstantin.miller@gmail.com>
+Date: Mon, 28 Oct 2013 16:10:29 +0100
+Subject: [PATCH 2/2] VLC patches for dashp2p shared memory communication (for
+ statistics and debuging).
+
+---
+ modules/demux/avformat/demux.c  |  9 +++++++++
+ src/input/decoder.c             | 14 ++++++++++++++
+ src/video_output/video_output.c | 12 ++++++++++++
+ 3 files changed, 35 insertions(+)
+
+diff --git a/modules/demux/avformat/demux.c b/modules/demux/avformat/demux.c
+index b09fad8..5f081a4 100644
+--- a/modules/demux/avformat/demux.c
++++ b/modules/demux/avformat/demux.c
+@@ -47,6 +47,12 @@
+ #include "../xiph.h"
+ #include "../vobsub.h"
+ 
++// BEGIN dashp2p fix
++#define DP2P_demux_c
++#include "../../../../dashp2p/StatisticsVlc.h"
++#undef DP2P_demux_c
++// END dashp2p fix
++
+ /* Support for deprecated APIs */
+ 
+ #if LIBAVFORMAT_VERSION_MAJOR < 54
+@@ -538,6 +544,7 @@ int OpenDemux( vlc_object_t *p_this )
+     }
+ 
+     ResetTime( p_demux, 0 );
++    dp2p_init(p_this); // dashp2p fix
+     return VLC_SUCCESS;
+ }
+ 
+@@ -571,6 +578,7 @@ void CloseDemux( vlc_object_t *p_this )
+ 
+     free( p_sys->io_buffer );
+     free( p_sys );
++    dp2p_cleanup(); // dashp2p fix
+ }
+ 
+ /*****************************************************************************
+@@ -674,6 +682,7 @@ static int Demux( demux_t *p_demux )
+     msg_Dbg( p_demux, "tk[%d] dts=%"PRId64" pts=%"PRId64,
+              pkt.stream_index, p_frame->i_dts, p_frame->i_pts );
+ #endif
++    dp2p_record_demuxed(p_frame->i_pts); // dashp2p fix
+     if( p_frame->i_dts > VLC_TS_INVALID )
+         p_sys->tk_pcr[pkt.stream_index] = p_frame->i_dts;
+ 
+diff --git a/src/input/decoder.c b/src/input/decoder.c
+index b1b038c..0e5fe59 100644
+--- a/src/input/decoder.c
++++ b/src/input/decoder.c
+@@ -53,6 +53,13 @@
+ 
+ #include "../video_output/vout_control.h"
+ 
++// BEGIN dashp2p fix
++#define DP2P_decoder_c
++#include "../../../dashp2p/StatisticsVlc.h"
++#undef DP2P_decoder_c
++// END dashp2p fix
++
++
+ static decoder_t *CreateDecoder( vlc_object_t *, input_thread_t *,
+                                  es_format_t *, bool, input_resource_t *,
+                                  sout_instance_t *p_sout );
+@@ -899,6 +906,7 @@ static decoder_t * CreateDecoder( vlc_object_t *p_parent,
+         p_owner->cc.pp_decoder[i] = NULL;
+     }
+     p_owner->i_ts_delay = 0;
++    dp2p_init(p_parent); // dashp2p fix
+     return p_dec;
+ }
+ 
+@@ -1422,11 +1430,15 @@ static void DecoderPlayVideo( decoder_t *p_dec, picture_t *p_picture,
+             p_picture->b_force = true;
+         }
+ 
++        const int64_t dp2pOldPts = p_picture->date; // dashp2p fix
++
+         const bool b_dated = p_picture->date > VLC_TS_INVALID;
+         int i_rate = INPUT_RATE_DEFAULT;
+         DecoderFixTs( p_dec, &p_picture->date, NULL, NULL,
+                       &i_rate, DECODER_BOGUS_VIDEO_DELAY );
+ 
++        dp2p_record_decoded(dp2pOldPts, p_picture->date); // dashp2p fix
++
+         vlc_mutex_unlock( &p_owner->lock );
+ 
+         /* */
+@@ -2139,6 +2151,8 @@ static void DeleteDecoder( decoder_t * p_dec )
+     vlc_object_release( p_dec );
+ 
+     free( p_owner );
++
++    dp2p_cleanup(); // dashp2p fix
+ }
+ 
+ /*****************************************************************************
+diff --git a/src/video_output/video_output.c b/src/video_output/video_output.c
+index 0c56ef9..199b066 100644
+--- a/src/video_output/video_output.c
++++ b/src/video_output/video_output.c
+@@ -52,6 +52,12 @@
+ #include "postprocessing.h"
+ #include "display.h"
+ 
++// BEGIN dashp2p fix
++#define DP2P_video_output_c
++#include "../../../dashp2p/StatisticsVlc.h"
++#undef DP2P_video_output_c
++// END dashp2p fix
++
+ /*****************************************************************************
+  * Local prototypes
+  *****************************************************************************/
+@@ -188,6 +194,8 @@ static vout_thread_t *VoutCreate(vlc_object_t *object,
+     if (vout->p->input)
+         spu_Attach(vout->p->spu, vout->p->input, true);
+ 
++    dp2p_init(object); // dashp2p fix
++
+     return vout;
+ }
+ 
+@@ -247,6 +255,8 @@ void vout_Close(vout_thread_t *vout)
+     spu_Destroy(vout->p->spu);
+     vout->p->spu = NULL;
+     vlc_mutex_unlock(&vout->p->spu_lock);
++
++    dp2p_cleanup(); // dashp2p fix
+ }
+ 
+ /* */
+@@ -829,6 +839,7 @@ static int ThreadDisplayPreparePicture(vout_thread_t *vout, bool reuse, bool is_
+             decoded = picture_Hold(vout->p->displayed.decoded);
+         } else {
+             decoded = picture_fifo_Pop(vout->p->decoder_fifo);
++            if(decoded) dp2p_record_vout_popped(decoded->date); // dashp2p fix
+             if (is_late_dropped && decoded && !decoded->b_force) {
+                 const mtime_t predicted = mdate() + 0; /* TODO improve */
+                 const mtime_t late = predicted - decoded->date;
+@@ -1050,6 +1061,7 @@ static int ThreadDisplayRenderPicture(vout_thread_t *vout, bool is_forced)
+ 
+     /* Display the direct buffer returned by vout_RenderPicture */
+     vout->p->displayed.date = mdate();
++    dp2p_record_vout_displayed(direct->date); // dashp2p fix
+     vout_display_Display(vd,
+                          sys->display.filtered ? sys->display.filtered
+                                                 : direct,
+-- 
+1.8.1.2
+
