@@ -7,6 +7,6 @@ This MPEG DASH plugin for VLC was developed during research work on adaptive vid
 A conference paper that evaluates one of the adaptation strategies used in the plugin is: **"Optimal Adaptation Trajectories for Block-Request Adaptive Video Streaming"**, [K. Miller](http://www.tkn.tu-berlin.de/menue/team/miller_konstantin/), N. Corda, S. Argyropoulos, A. Raake, A. Wolisz, in proceedings of IEEE 20th International Packet Video Workshop 2013 (PV2013), San Jose, USA. 
 The strategy itself was described in more details in: **["Adaptation Algorithm for Adaptive Streaming over HTTP"](http://dx.doi.org/10.1109/PV.2012.6229732)**, [K. Miller](http://www.tkn.tu-berlin.de/menue/team/miller_konstantin/), E. Quacchio, G. Gennari, A. Wolisz, in proceedings of IEEE 19th International Packet Video Workshop (PV 2012), Munich, Germany.
 
-### Issues
-Report issues [here](https://github.com/konstantinmiller/dashp2p/issues).
-A wiki page is available [here](https://github.com/konstantinmiller/dashp2p/wiki).
+Please see the [README](https://github.com/konstantinmiller/dashp2p/blob/master/README) file for more details.
+
+
