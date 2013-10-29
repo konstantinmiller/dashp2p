@@ -4,7 +4,8 @@ binary, we always mean the one in GITROOT/vlc, not the one that might be
 installed on your system. Finally, in the following, all relative paths are
 w.r.t. the GITROOT.
 
-1. Compilation
+==============================================================================
+Compilation
 
  o In GITROOT, call
    a: ./bootstrap
@@ -17,7 +18,7 @@ w.r.t. the GITROOT.
       machine)
    (The VLC binary is now in the GITROOT/vlc folder.)
 
- o VLC requires a lot of libraries for compilation. Look for the packages
+ o VLC requires a lot of libraries. Look for the packages
    ending with -dev in your system's package manager (e.g., synaptic on
    Ubuntu). You will need the following packets (and probably some 
    others as well):
@@ -36,7 +37,7 @@ w.r.t. the GITROOT.
    Replace XX with the appropriate version for your system.
    
    Most of those packages are not needed for dashp2p but VLC requires them
-   during the configuration process. You could also disable them by
+   during the configuration process. You could also disable some of them by
    adding --disable-<libname> to the ./configure command if you do not want
    to use VLC other than with dashp2p.
 
@@ -48,8 +49,8 @@ w.r.t. the GITROOT.
    This command should display the configuration options of the dashp2p module.
    The advanced options are displayed if you add the --advanced option.
 
-   
-2. Running
+==============================================================================
+Running
    
  o Now you have the VLC binary in GITROOT/vlc/vlc. You can start streaming 
    by executing ./vlc http://somehost/somempdfile.mpd
@@ -83,13 +84,18 @@ w.r.t. the GITROOT.
    To get help on VLC options, use:
     vlc --longhelp --full-help --help-verbose --advanced
 
- o You can run vlc in a debugger by typing
-   gdb --eval-command run --args GITROOT/vlc/vlc http://somehost/somempdfile.mpd
-   For example, with all the additional options:
-   gdb --eval-command run --args ./vlc/vlc --clock-jitter=0 -Idummy --no-auto-preparse --no-media-library --play-and-exit --album-art 0 --ignore-config --no-input-record-native --dashp2p-width=320 --dashp2p-height=240  --sub-source=overlay --overlay-input=dashp2p_overlay_input --overlay-output=dashp2p_overlay_output http://somehost/somempdfile.mpd
+==============================================================================
+Debugging
+
+ o You can generate (a huge amount of) debug output by adding the options
+     --file-logging --log-verbose=2 --dashp2p-logfile <file name>
+
+ o You can run vlc in a debugger by executing
+   gdb --eval-command run --args GITROOT/vlc/vlc <VLC and dashp2p options> http://somehost/somempdfile.mpd
    (In the end, press 'q' to quit the debugger prompt.)
- 
-3. Collecting measurements
+  
+==============================================================================
+Collecting measurements
 
  o If you want dashp2p to collect measurements and output them to file, you
    need to add the option
@@ -103,4 +109,21 @@ w.r.t. the GITROOT.
    string. If you run multiple instances of VLC with dashp2p in parallel,
    each instance need to be passed a unique string.
 
+==============================================================================
+Reporting issues, debugging, requesting features
+
+  o If you have a problem, let us know about it, preferably using the github
+    issues tracker. Please also provide debug output (see above).
+ 
+  o If you have a feature request, let us know, preferably using the github
+    issues tracker.
+
+==============================================================================
+Referencing
+
+  o If you want to reference our work, you may cite the following paper:
+    "Optimal Adaptation Trajectories for Block-Request Adaptive Video 
+    Streaming", K. Miller, N. Corda, S. Argyropoulos, A. Raake, A. Wolisz, in
+    proceedings of IEEE 20th International Packet Video Workshop 2013 (PV2013),
+    San Jose, USA.
 
