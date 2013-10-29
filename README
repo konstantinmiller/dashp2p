@@ -1,0 +1,85 @@
+In the following, GITROOT denotes the root of the GIT tree, that is, the
+folder that contains this README file. Further, whenever we refer to the VLC
+binary, we always mean the one in GITROOT/vlc, not the one that might be
+installed on your system. Finally, in the following, all relative paths are
+w.r.t. the GITROOT.
+
+1. Compilation
+
+ o In GITROOT, call
+   a: ./bootstrap
+
+ o In GITROOT/vlc, do (see also the next bullet point about required
+   libraries):
+   a: ./bootstrap 
+   b: ./configure --enable-debug
+   c: make (you might want to add -j4 or -j8 to speed up on a multi-core
+      machine)
+   (The VLC binary is now in the GITROOT/vlc folder.)
+
+ o VLC requires a lot of libraries for compilation. Look for the packages
+   ending with -dev in your system's package manager (e.g., synaptic on
+   Ubuntu). You will need the following packets (and probably some 
+   others as well):
+   g++ autoconf libtool luaXX libluaXX-dev libavformat-dev libxml2-dev
+   libasound2-dev libgl1-mesa-dev libgcryptXX-dev libdbus-1-dev gettext
+   libdvb-dev, libdvbpsi-dev, libqt4-dev, libmad0-dev, libswscale-dev,
+   liba52-XXX-dev, libxcb-shm0-dev, libxcb-composite0-dev, libxcb-xv0-dev,
+   libxcb-keysyms1-dev, libxcb-randr0-dev, libmpeg2-4-dev, libtwolame-dev,
+   libraw1394-dev, libnotify-dev libmtp-dev libudev-dev libavahi-client-dev,
+   libprojectm-dev libjack-dev libsamplerate0-dev libcaca-dev librsvg2-dev,
+   libsdl1.2-dev libkate-dev fluidsynth libvorbis-dev libva-dev libva-x11-1,
+   libcrystalhd-dev libmodplug-dev libssh2-1-dev libcddb2-dev
+   libgnome-vfs2.0-cil-dev libopencv-dev libdvdnav-dev libupnp3 libupnp-dev 
+   libupnp3-dev libcv-dev
+
+   Replace XX with the appropriate version for your system.
+   
+   Most of those packages are not needed for dashp2p but VLC requires them
+   during the configuration process. You could also disable them by
+   adding --disable-<libname> to the ./configure command if you do not want
+   to use VLC other than with dashp2p.
+
+ o In GITROOT/dashp2p, do
+   a: make
+
+ o Verify that everything went fine by executing
+   a: ./vlc --module dashp2p
+   This command should display the configuration options of the dashp2p module.
+   The advanced options are displayed if you add the --advanced option.
+
+   
+2. Running
+   
+ o Now you have the VLC binary in GITROOT/vlc/vlc. You can start streaming 
+   by executing ./vlc http://somehost/somempdfile.mpd
+   Of course you can also add GITROOT/vlc to your PATH or create a
+   symbolic link to GITROOT/vlc/vlc to a folder already in your path 
+   (like, e.g., ~/bin).
+
+ o If you want to evaluate adaptation behavior, you should run VLC with the
+   --clock-jitter=0 option. The option --play-and-exit is useful if you want
+   to run a batch of experiments. Also, the options --no-media-library, 
+   --album-arg 0 might speed up the start-up time.
+
+ o If you want to see some overlay information on top of the video about what
+   is currently happening, you can add the options
+     --sub-source=overlay 
+     --overlay-input=dashp2p_overlay_input 
+     --overlay-output=dashp2p_overlay_output
+   If the overlay does not work, check the output of the VLC configure script
+   (see above) and install the missing libraries.
+
+ o You can adjust the configuration by editing the standard VLC config file
+   (in Ubuntu 12.04 it is ~/.config/vlc/vlcrc) or by providing an own config
+   file and running
+   GITROOT/vlc/vlc --config /path/to/config http://somehost/somempdfile.mpd
+   To get help on VLC options, use:
+    vlc --longhelp --full-help --help-verbose --advanced
+
+ o You can run vlc in a debugger by typing
+   gdb --eval-command run --args GITROOT/vlc/vlc http://somehost/somempdfile.mpd
+   For example, with all the additional options:
+   gdb --eval-command run --args ./vlc/vlc --clock-jitter=0 -Idummy --no-auto-preparse --no-media-library --play-and-exit --album-art 0 --ignore-config --no-input-record-native --dashp2p-width=320 --dashp2p-height=240  --sub-source=overlay --overlay-input=dashp2p_overlay_input --overlay-output=dashp2p_overlay_output http://somehost/somempdfile.mpd
+   (In the end, press 'q' to quit the debugger prompt.)
+ 
