@@ -65,7 +65,9 @@ namespace dashp2p {
             string name = rawStr;
 #endif
             dp2p_assert(1 == xmlTextReaderRead(p_xmlReader));
-            dp2p_assert(XML_READER_TYPE_ELEMENT == xmlTextReaderNodeType(p_xmlReader));
+            //const int nodeType = xmlTextReaderNodeType(p_xmlReader);
+            //dp2p_assert_v(XML_READER_TYPE_ELEMENT == nodeType,
+            //        "Type: %d (instead of %d).", nodeType, XML_READER_TYPE_ELEMENT);
             string name((char*)xmlTextReaderConstName(p_xmlReader));
 
             handler.onDocumentStart();

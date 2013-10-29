@@ -46,7 +46,7 @@ namespace dashp2p {
         	VLCDocumentAdapter(stream_t* p_stream): p_stream(p_stream), p_xml(NULL), p_xmlReader(NULL) {}
         	virtual ~VLCDocumentAdapter() {xml_ReaderDelete(p_xmlReader); xml_Delete(p_xml); stream_Delete(p_stream);}
 #endif
-        	VLCDocumentAdapter(char* buffer, int size): buffer(buffer), size(size) {}
+        	VLCDocumentAdapter(char* buffer, int size): buffer(buffer), size(size), p_xmlReader(NULL) {}
         	virtual ~VLCDocumentAdapter() {xmlFreeTextReader(p_xmlReader); delete[] buffer;}
 
             virtual void parse(BasicDocumentHandler& handler);
