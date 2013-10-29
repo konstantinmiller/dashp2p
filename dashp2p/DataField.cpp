@@ -21,16 +21,17 @@
  ****************************************************************************/
 
 
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
+#include "DebugAdapter.h"
 #include "DataField.h"
-#include <assert.h>
-#include <stdio.h>
-#include <string.h>
-#include <inttypes.h>
+#include <cassert>
+#include <cstdio>
+#include <cstring>
 #include <list>
 using std::list;
 using std::pair;
 
+namespace dashp2p {
 
 DataField::DataField(int64_t numBytes)
   : p(new char[numBytes]),
@@ -182,9 +183,9 @@ string DataField::printDownloadedData(int64_t offset) const
     {
         if(it->second >= offset) {
             if(ret.empty())
-                sprintf(tmp, "[%"PRId64",%"PRId64"]", std::max<int64_t>(it->first, offset), it->second);
+                sprintf(tmp, "[%" PRId64 ",%" PRId64 "]", std::max<int64_t>(it->first, offset), it->second);
             else
-                sprintf(tmp, ",[%"PRId64",%"PRId64"]", std::max<int64_t>(it->first, offset), it->second);
+                sprintf(tmp, ",[%" PRId64 ",%" PRId64 "]", std::max<int64_t>(it->first, offset), it->second);
             ret.append(tmp);
         }
     }
@@ -217,5 +218,7 @@ void DataField::reserve(int64_t numBytes)
 
 void DataField::mergeMap()
 {
+
+}
 
 }

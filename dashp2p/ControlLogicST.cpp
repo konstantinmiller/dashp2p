@@ -20,27 +20,40 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
  ****************************************************************************/
 
+/**
+ * Performs the adaptation as in
+ *     "Adaptation Algorithm for Adaptive Streaming over HTTP",
+ *     K Miller, E Quacchio, G Gennari, A Wolisz,
+ *     IEEE 19th International Packet Video Workshop (PV 2012),
+ *     May 2012, Munich, Germany
+ *
+ * The adaptation algorithm is subject to a pending patent application by STMicroelectronics:
+ *     "Media-quality adaptation mechanisms for dynamic adaptive streaming"
+ *     Inventors: Konstantin Miller, Emanuele Quacchio,
+ *     Publication date: 2013/2/25
+ *     Patent office: US
+ *     Application number: 13/775,885 **/
+
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
 
-#include "Dashp2pTypes.h"
-#include "ContentIdMpd.h"
-#include "ContentIdSegment.h"
+//#include "Dashp2pTypes.h"
+#include "ContentId.h"
 #include "ControlLogicST.h"
-#include "ControlLogicActionCloseTcpConnection.h"
-#include "ControlLogicActionCreateTcpConnection.h"
-#include "ControlLogicActionStartDownload.h"
+#include "ControlLogicAction.h"
 #include "Statistics.h"
 #include "OverlayAdapter.h"
 #include "DebugAdapter.h"
+#include "HttpRequestManager.h"
+#include "TcpConnectionManager.h"
+#include "SourceManager.h"
 
-#include <stdio.h>
-#include <assert.h>
+#include <cstdio>
+#include <cassert>
 #include <utility>
 #include <limits>
 using std::numeric_limits;
-
 
 // TODO: improve upswitching responsiveness after bandwidth increase
 // TODO: switch to higher bit-rate even if the buffer level is low if the throughput is high enough and stable for a long time!
@@ -48,9 +61,10 @@ using std::numeric_limits;
 // TODO: take throughput more into account. e.g., if buffer level high enough but Bmin relatively low (seconds), then it might be too late to switch to lower or lowest bandwidth when beta crosses Bmin. if no throughput, have to switch down faster.
 // TODO: at the moment, if we don't manage to ramp up to appropriate bit-rate during initial increase, it takes too long to adapt. fix that.
 
+namespace dashp2p {
 
-ControlLogicST::ControlLogicST(int width, int height, Usec startPosition, Usec stopPosition, const std::string& config)
-  : ControlLogic(width, height, startPosition, stopPosition),
+ControlLogicST::ControlLogicST(int width, int height, const std::string& config)
+  : ControlLogic(width, height),
     Bmin(0),
     Blow(0),
     Bhigh(0),
@@ -63,9 +77,9 @@ ControlLogicST::ControlLogicST(int width, int height, Usec startPosition, Usec s
     betaTimeSeries(NULL),
     initialIncrease(true),
     initialIncreaseTerminationTime(0),
-    Bdelay(numeric_limits<dash::Usec>::max()),
+    Bdelay(numeric_limits<int64_t>::max()),
     delayedRequests(),
-    connId(0),
+    connId(-1),
     mpdUrl()
 {
 
@@ -74,7 +88,7 @@ ControlLogicST::ControlLogicST(int width, int height, Usec startPosition, Usec s
         dp2p_assert(0);
     }
 
-    betaTimeSeries = new TimeSeries<dash::Usec>(1000000, false, true);
+    betaTimeSeries = new TimeSeries<int64_t>(1000000, false, true);
 
     Statistics::recordScalarDouble("Bmin", Bmin);
     Statistics::recordScalarDouble("Blow", Blow);
@@ -113,15 +127,15 @@ list<ControlLogicAction*> ControlLogicST::processEventDataPlayed(const ControlLo
 	list<ControlLogicAction*> actions;
 
 	/* Calculate if beta_min is increasing. */
-	betaTimeSeries->pushBack(dash::Utilities::getTime(), e.availableContigInterval.first);
+	betaTimeSeries->pushBack(dashp2p::Utilities::getTime(), e.availableContigInterval.first);
 
 	if(!delayedRequests.empty() && e.availableContigInterval.first <= Bdelay)
 	{
-		INFOMSG("[%.3fs] beta <= Bdelay (%.3g <= %.3g). Release %d delayed request(s).", dash::Utilities::now(), e.availableContigInterval.first / 1e6, Bdelay / 1e6, delayedRequests.size());
+		INFOMSG("[%.3fs] beta <= Bdelay (%.3g <= %.3g). Release %d delayed request(s).", dashp2p::Utilities::now(), e.availableContigInterval.first / 1e6, Bdelay / 1e6, delayedRequests.size());
 		dp2p_assert(delayedRequests.size() == 1);
 		actions.push_back(createActionDownloadSegments(delayedRequests, connId, HttpMethod_GET));
 		delayedRequests.clear();
-		Bdelay = numeric_limits<dash::Usec>::max();
+		Bdelay = numeric_limits<int64_t>::max();
 	}
 
 	return actions;
@@ -135,18 +149,18 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedMpd(ControlLog
 
 	if(mpdDataField == NULL) {
 		dp2p_assert(e.byteFrom == 0);
-		mpdDataField = new DataField(e.getContentLength());
+		mpdDataField = new DataField(HttpRequestManager::getContentLength(e.reqId));
 		dp2p_assert(mpdDataField);
 	}
 
 	dp2p_assert(!mpdDataField->full());
 
-	mpdDataField->setData(e.byteFrom, e.byteTo, e.getPldBytes() + e.byteFrom, false);
+	mpdDataField->setData(e.byteFrom, e.byteTo, HttpRequestManager::getPldBytes(e.reqId) + e.byteFrom, false);
 
 	if(mpdDataField->full()) {
 		processEventDataReceivedMpd_Completed();
-		ackActionRequestCompleted(e.getContentId());
-		Statistics::recordRequestStatistics(e.getConnId(), e.takeRequest());
+		ackActionRequestCompleted(HttpRequestManager::getContentId(e.reqId));
+		Statistics::recordRequestStatistics(e.connId, e.reqId);
 	} else {
 		return actions;
 	}
@@ -201,24 +215,24 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 	/* Return object */
 	list<ControlLogicAction*> actions;
 
-	const ContentIdSegment& segId = dynamic_cast<const ContentIdSegment&>(e.getContentId());
+	const ContentIdSegment& segId = dynamic_cast<const ContentIdSegment&>(HttpRequestManager::getContentId(e.reqId));
 
 	/* We do not start a new download if (i) the last one is not finished yet, or (ii) we have already downloading the stop segment,
 	 * or (iii) we downloaded the initial segment (since we have aready requested initial segment and start segment pipelined) */
-	if(e.byteTo != e.getContentLength() - 1) {
+	if(e.byteTo != HttpRequestManager::getContentLength(e.reqId) - 1) {
 		DBGMSG("Segment not ready yet. No action required.");
 		return actions;
 	}
 
 	DBGMSG("Segment completed. Processing.");
 
-	dp2p_assert(ackActionRequestCompleted(e.getContentId()));
+	dp2p_assert(ackActionRequestCompleted(HttpRequestManager::getContentId(e.reqId)));
 	dp2p_assert(delayedRequests.empty());
 
 	/* Give the HttpRequest object to the Statistics module. It will delete it later. */
-	Statistics::recordRequestStatistics(e.getConnId(), e.takeRequest());
+	Statistics::recordRequestStatistics(e.connId, e.reqId);
 
-	betaTimeSeries->pushBack(dash::Utilities::getTime(), e.availableContigInterval.first);
+	betaTimeSeries->pushBack(dashp2p::Utilities::getTime(), e.availableContigInterval.first);
 
 	if (segId.segmentIndex() == getStopSegment()) {
 		DBGMSG("Stop segment. No action required.");
@@ -230,10 +244,10 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 
 	/* select bit-rate */
 	const bool ifBetaMinIncreasing = betaTimeSeries->minIncreasing();
-	const dash::Usec beta = e.availableContigInterval.first;
+	const int64_t beta = e.availableContigInterval.first;
 	// TODO: in the next two lines we need to use the proper connection ID!
-	const double rho = Statistics::getThroughput(e.getConnId(), std::min<double>(Delta_t, dash::Utilities::now()));
-	const double rhoLast = Statistics::getThroughputLastRequest(e.getConnId());
+	const double rho = Statistics::getThroughput(e.connId, std::min<double>(Delta_t, dashp2p::Utilities::now()));
+	const double rhoLast = Statistics::getThroughputLastRequest(e.connId);
 	const unsigned completedRequests = (segId.segmentIndex() == 0) ? 1 : segId.segmentIndex() - getStartSegment() + 2;
 	Decision adaptationDecision = selectRepresentation(
 			ifBetaMinIncreasing,
@@ -258,7 +272,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 			segNext->bitRate() / 1e6, Bdelay / 1e6);
 
 	/* log selected bit-rate */
-	Statistics::recordAdaptationDecision(dash::Utilities::now(), beta, rho, rhoLast, segId.bitRate(), r_new, Bdelay, ifBetaMinIncreasing, adaptationDecision.reason);
+	Statistics::recordAdaptationDecision(dashp2p::Utilities::now(), beta, rho, rhoLast, segId.bitRate(), r_new, Bdelay, ifBetaMinIncreasing, adaptationDecision.reason);
 
 	/* Update contour */
 	//ControlLogicActionUpdateContour* updateContour = new ControlLogicActionUpdateContour();
@@ -279,6 +293,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 	return actions;
 }
 
+#if 0
 list<ControlLogicAction*> ControlLogicST::processEventDisconnect(const ControlLogicEventDisconnect& e)
 {
 	DBGMSG("Event: %s.", e.toString().c_str());
@@ -296,25 +311,26 @@ list<ControlLogicAction*> ControlLogicST::processEventDisconnect(const ControlLo
 	actions.push_back(new ControlLogicActionCreateTcpConnection(connId, IfData(), mpdUrl.hostName, 0));
 
 	list<const ContentId*> contentIds;
-	for(list<HttpRequest*>::const_iterator it = e.reqs.begin(); it != e.reqs.end(); ++it)
-	{
-		contentIds.push_back((*it)->getContentId().copy());
-		delete *it;
-	}
+	for(list<int>::const_iterator it = e.reqs.begin(); it != e.reqs.end(); ++it)
+		contentIds.push_back(HttpRequestManager::getContentId(*it).copy());
 	if(!contentIds.empty()) {
 		actions.push_back(createActionDownloadSegments(contentIds, connId, HttpMethod_GET));
 	}
 
 	return actions;
 }
+#endif
 
+#if 0
 list<ControlLogicAction*> ControlLogicST::processEventPause(const ControlLogicEventPause& e)
 {
 	DBGMSG("Event: %s.", e.toString().c_str());
 	contour.clear();
 	return list<ControlLogicAction*>();
 }
+#endif
 
+#if 0
 list<ControlLogicAction*> ControlLogicST::processEventResumePlayback(const ControlLogicEventResumePlayback& e)
 {
 	DBGMSG("Event: %s.", e.toString().c_str());
@@ -325,7 +341,7 @@ list<ControlLogicAction*> ControlLogicST::processEventResumePlayback(const Contr
 
 	delayedRequests.clear();
 
-	startPosition = e.startPosition;
+	//startPosition = e.startPosition;
 
 	DBGMSG("Setting startSegment: %d, stopSegment: %d.", getStartSegment(), getStopSegment());
 
@@ -357,6 +373,7 @@ list<ControlLogicAction*> ControlLogicST::processEventResumePlayback(const Contr
 
 	return actions;
 }
+#endif
 
 list<ControlLogicAction*> ControlLogicST::processEventStartPlayback(const ControlLogicEventStartPlayback& e)
 {
@@ -367,17 +384,20 @@ list<ControlLogicAction*> ControlLogicST::processEventStartPlayback(const Contro
 	mpdUrl = e.mpdUrl;
 
 	/* Create a new TCP connection */
-	actions.push_back(new ControlLogicActionCreateTcpConnection(connId, IfData(), mpdUrl.hostName, 0));
+	const int srcId = SourceManager::add(mpdUrl.hostName);
+	connId = TcpConnectionManager::create(srcId);
+	actions.push_back(new ControlLogicActionOpenTcpConnection(connId));
 
 	/* Start MPD download */
 	list<const ContentId*> contentIds(1, new ContentIdMpd);
-	list<dash::URL> urls(1, mpdUrl);
+	list<dashp2p::URL> urls(1, mpdUrl);
 	list<HttpMethod> httpMethods(1, HttpMethod_GET);
 	actions.push_back(new ControlLogicActionStartDownload(connId, contentIds, urls, httpMethods));
 
 	return actions;
 }
 
+#if 0
 list<ControlLogicAction*> ControlLogicST::actionRejectedStartDownload(ControlLogicActionStartDownload* a)
 {
 	const int numPendingActions = pendingActions.size();
@@ -457,6 +477,7 @@ list<ControlLogicAction*> ControlLogicST::actionRejectedStartDownload(ControlLog
 
 	return actions;
 }
+#endif
 
 enum DecisionReason {
     II1_UP = 20,
@@ -485,7 +506,7 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
             ifBetaMinIncreasing ? "beta_min incr." : "beta_min decr.", beta, rho / 1e6, rhoLast / 1e6, lastSegment.bitRate() / 1e6);
 
     /* current time since beginning of download */
-    const dash::Usec now = dash::Utilities::getTime();
+    const int64_t now = dashp2p::Utilities::getTime();
 
     /* verify that we already obtained a list of representations */
     dp2p_assert(bitRates.size() && completedRequests > 1);
@@ -505,18 +526,18 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
         /* Check if we already selected highest representation. */
         if (initialIncrease && iLast == iHighest) {
             initialIncrease = false;
-            INFOMSG("[%.3fs] Terminating initial increase phase. Reached highest representation.", dash::Utilities::now());
+            INFOMSG("[%.3fs] Terminating initial increase phase. Reached highest representation.", dashp2p::Utilities::now());
         }
 
         /* Check if the discretized minimum buffer level had been decreasing. */
         if (initialIncrease && !ifBetaMinIncreasing) {
             initialIncrease = false;
-            INFOMSG("[%.3fs] Terminating initial increase phase. Discretized min buffer level was decreasing: %s.", dash::Utilities::now(), betaTimeSeries->printDiscretizedMin().c_str());
+            INFOMSG("[%.3fs] Terminating initial increase phase. Discretized min buffer level was decreasing: %s.", dashp2p::Utilities::now(), betaTimeSeries->printDiscretizedMin().c_str());
         }
 
         /* Check if current representation is above alfa1 * rho. */
         if (initialIncrease && bitRates.at(iLast) > alfa1 * rho) {
-            INFOMSG("[%.3fs] Terminating initial increase phase. r_higher > alfa1 * rho (%.3f > %f * %.3f).", dash::Utilities::now(),
+            INFOMSG("[%.3fs] Terminating initial increase phase. r_higher > alfa1 * rho (%.3f > %f * %.3f).", dashp2p::Utilities::now(),
             		bitRates.at(iLast) / 1e6, alfa1, rho / 1e6);
             initialIncrease = false;
         }
@@ -527,26 +548,26 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
         {
             DBGMSG("We are in [0,Bmin).");
             if (bitRates.at(iLast + 1) <= alfa2 * rho) {
-                INFOMSG("[%.3fs] InitialIncrease. beta in [0, Bmin) (%.3g in [0, %g)). Throughput high enough to increase: r_higher <= alfa2 * rho (%.3g <= %g * %.3g).", dash::Utilities::now(),
+                INFOMSG("[%.3fs] InitialIncrease. beta in [0, Bmin) (%.3g in [0, %g)). Throughput high enough to increase: r_higher <= alfa2 * rho (%.3g <= %g * %.3g).", dashp2p::Utilities::now(),
                         beta, Bmin, bitRates.at(iLast + 1) / 1e6, alfa2, rho / 1e6);
-                return Decision(bitRates.at(iLast + 1), std::numeric_limits<dash::Usec>::max(), II1_UP);
+                return Decision(bitRates.at(iLast + 1), std::numeric_limits<int64_t>::max(), II1_UP);
             } else {
-                INFOMSG("[%.3fs] InitialIncrease. beta in [0, Bmin) (%.3g in [0, %g)). Throughput too low to increase: r_higher > alfa2 * rho (%.3g <= %g * %.3g).", dash::Utilities::now(),
+                INFOMSG("[%.3fs] InitialIncrease. beta in [0, Bmin) (%.3g in [0, %g)). Throughput too low to increase: r_higher > alfa2 * rho (%.3g <= %g * %.3g).", dashp2p::Utilities::now(),
                         beta, Bmin, bitRates.at(iLast + 1) / 1e6, alfa2, rho / 1e6);
-                return Decision(bitRates.at(iLast), std::numeric_limits<dash::Usec>::max(), II1_KEEP);
+                return Decision(bitRates.at(iLast), std::numeric_limits<int64_t>::max(), II1_KEEP);
             }
         }
         else if (initialIncrease && beta < Blow)
         {
             DBGMSG("We are in [Bmin, Blow).");
             if (bitRates.at(iLast + 1) <= alfa3 * rho) {
-                INFOMSG("[%.3fs] InitialIncrease. beta in [Bmin, Blow) (%.3g in [%g, %g)). Throughput high enough to increase: r_higher <= alfa3 * rho (%.3g <= %g * %.3g).", dash::Utilities::now(),
+                INFOMSG("[%.3fs] InitialIncrease. beta in [Bmin, Blow) (%.3g in [%g, %g)). Throughput high enough to increase: r_higher <= alfa3 * rho (%.3g <= %g * %.3g).", dashp2p::Utilities::now(),
                         beta, Bmin, Blow, bitRates.at(iLast + 1) / 1e6, alfa3, rho / 1e6);
-                return Decision(bitRates.at(iLast + 1), std::numeric_limits<dash::Usec>::max(), II2_UP);
+                return Decision(bitRates.at(iLast + 1), std::numeric_limits<int64_t>::max(), II2_UP);
             } else {
-                INFOMSG("[%.3fs] InitialIncrease. beta in [Bmin, Blow) (%.3g in [%g, %g)). Throughput too low to increase: r_higher > alfa3 * rho (%.3g <= %g * %.3g).", dash::Utilities::now(),
+                INFOMSG("[%.3fs] InitialIncrease. beta in [Bmin, Blow) (%.3g in [%g, %g)). Throughput too low to increase: r_higher > alfa3 * rho (%.3g <= %g * %.3g).", dashp2p::Utilities::now(),
                         beta, Bmin, Blow, bitRates.at(iLast + 1) / 1e6, alfa3, rho / 1e6);
-                return Decision(bitRates.at(iLast), std::numeric_limits<dash::Usec>::max(), II2_KEEP);
+                return Decision(bitRates.at(iLast), std::numeric_limits<int64_t>::max(), II2_KEEP);
             }
         }
         else if (initialIncrease)
@@ -556,10 +577,10 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
             	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast + 1), lastSegment.segmentIndex() + 1);
             	const double Bdelay_new = (Bhigh - mpdWrapper->getSegmentDuration(nextSegment) / 1e6);
                 if(Bdelay_new < beta) {
-                    INFOMSG("[%.3fs] InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput high enough to increase: r_higher <= alfa4 * rho (%.3f <= %f * %.3f). Delay until beta = %.3f.", dash::Utilities::now(),
+                    INFOMSG("[%.3fs] InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput high enough to increase: r_higher <= alfa4 * rho (%.3f <= %f * %.3f). Delay until beta = %.3f.", dashp2p::Utilities::now(),
                             beta, Blow, bitRates.at(iLast + 1) / 1e6, alfa4, rho / 1e6, Bdelay_new);
                 } else {
-                    INFOMSG("[%.3fs] InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput high enough to increase: r_higher <= alfa4 * rho (%.3f <= %f * %.3f).", dash::Utilities::now(),
+                    INFOMSG("[%.3fs] InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput high enough to increase: r_higher <= alfa4 * rho (%.3f <= %f * %.3f).", dashp2p::Utilities::now(),
                             beta, Blow, bitRates.at(iLast + 1) / 1e6, alfa4, rho / 1e6);
                 }
                 return Decision(bitRates.at(iLast + 1), Bdelay_new * 1000000, II3_UP);
@@ -567,10 +588,10 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
             	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast), lastSegment.segmentIndex() + 1);
             	const double Bdelay_new = (Bhigh - mpdWrapper->getSegmentDuration(nextSegment) / 1e6);
                 if(Bdelay_new < beta) {
-                    INFOMSG("[%.3fs] InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher > alfa4 * rho (%.3f <= %f * %.3f). Delay until beta = %.3f.", dash::Utilities::now(),
+                    INFOMSG("[%.3fs] InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher > alfa4 * rho (%.3f <= %f * %.3f). Delay until beta = %.3f.", dashp2p::Utilities::now(),
                             beta, Blow, bitRates.at(iLast) / 1e6, alfa4, rho / 1e6, Bdelay_new);
                 } else {
-                    INFOMSG("[%.3fs] InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher > alfa4 * rho (%.3f <= %f * %.3f).", dash::Utilities::now(),
+                    INFOMSG("[%.3fs] InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher > alfa4 * rho (%.3f <= %f * %.3f).", dashp2p::Utilities::now(),
                             beta, Blow, bitRates.at(iLast) / 1e6, alfa4, rho / 1e6);
                 }
                 return Decision(bitRates.at(iLast), Bdelay_new * 1000000, II3_KEEP);
@@ -589,23 +610,23 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
     /* we are in [0, Bmin) */
     if (beta < Bmin)
     {
-        INFOMSG("[%.3fs] beta in [0, Bmin) (%.3g in [0, %g)). Switching to lowest representation: %.3g. rho = %.3g. rhoLast = %.3g.", dash::Utilities::now(), beta, Bmin, bitRates.at(iLowest) / 1e6, rho / 1e6, rhoLast / 1e6);
-        return Decision(bitRates.at(iLowest), std::numeric_limits<dash::Usec>::max(), NO0_LOWEST);
+        INFOMSG("[%.3fs] beta in [0, Bmin) (%.3g in [0, %g)). Switching to lowest representation: %.3g. rho = %.3g. rhoLast = %.3g.", dashp2p::Utilities::now(), beta, Bmin, bitRates.at(iLowest) / 1e6, rho / 1e6, rhoLast / 1e6);
+        return Decision(bitRates.at(iLowest), std::numeric_limits<int64_t>::max(), NO0_LOWEST);
     }
 
     /* We are in [Bmin, Blow). */
     else if (beta < Blow)
     {DBGMSG("We are NOT at lowest representation. Checking if shall switch down.");
         if (iLast == iLowest) {
-            INFOMSG("[%.3fs] beta in [Bmin, Blow) (%.3g in [%g, %g)). Already at lowest representation: %.3g.", dash::Utilities::now(), beta, Bmin, Blow, bitRates.at(iLowest) / 1e6);
-            return Decision(bitRates.at(iLast), std::numeric_limits<dash::Usec>::max(), NO1_LOWEST);
+            INFOMSG("[%.3fs] beta in [Bmin, Blow) (%.3g in [%g, %g)). Already at lowest representation: %.3g.", dashp2p::Utilities::now(), beta, Bmin, Blow, bitRates.at(iLowest) / 1e6);
+            return Decision(bitRates.at(iLast), std::numeric_limits<int64_t>::max(), NO1_LOWEST);
         } else {
             if (rhoLast > (double)bitRates.at(iLast)) {
-                INFOMSG("[%.3fs] beta in [Bmin, Blow) (%.3g in [%g, %g)). Throughput high enough to keep bit-rate: rhoLast > r_last (%.3g > %.3g).", dash::Utilities::now(), beta, Bmin, Blow, rhoLast / 1e6, bitRates.at(iLast) / 1e6);
-                return Decision(bitRates.at(iLast), std::numeric_limits<dash::Usec>::max(), NO1_KEEP);
+                INFOMSG("[%.3fs] beta in [Bmin, Blow) (%.3g in [%g, %g)). Throughput high enough to keep bit-rate: rhoLast > r_last (%.3g > %.3g).", dashp2p::Utilities::now(), beta, Bmin, Blow, rhoLast / 1e6, bitRates.at(iLast) / 1e6);
+                return Decision(bitRates.at(iLast), std::numeric_limits<int64_t>::max(), NO1_KEEP);
             } else {
-                INFOMSG("[%.3fs] beta in [Bmin, Blow) (%.3g in [%g, %g)). Throughput too low to keep bit-rate: rhoLast <= r_last (%.3g > %.3g).", dash::Utilities::now(), beta, Bmin, Blow, rhoLast / 1e6, bitRates.at(iLast) / 1e6);
-                return Decision(bitRates.at(iLast - 1), std::numeric_limits<dash::Usec>::max(), NO1_DOWN);
+                INFOMSG("[%.3fs] beta in [Bmin, Blow) (%.3g in [%g, %g)). Throughput too low to keep bit-rate: rhoLast <= r_last (%.3g > %.3g).", dashp2p::Utilities::now(), beta, Bmin, Blow, rhoLast / 1e6, bitRates.at(iLast) / 1e6);
+                return Decision(bitRates.at(iLast - 1), std::numeric_limits<int64_t>::max(), NO1_DOWN);
             }
         }
     }
@@ -620,22 +641,22 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
             const double Bdelay_new = std::max<double>(beta - mpdWrapper->getSegmentDuration(nextSegment) / 1e6, 0.5 * (Blow + Bhigh));
             if(iLast == iHighest) {
                 if(beta > Bdelay_new) {
-                    INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Already at highest bit-rate (%.3g). Delay until beta = %.3g.", dash::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iHighest) / 1e6, Bdelay_new);
+                    INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Already at highest bit-rate (%.3g). Delay until beta = %.3g.", dashp2p::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iHighest) / 1e6, Bdelay_new);
                 } else {
-                    INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Already at highest bit-rate (%.3g).", dash::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iHighest) / 1e6);
+                    INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Already at highest bit-rate (%.3g).", dashp2p::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iHighest) / 1e6);
                 }
             } else {
                 if(beta > Bdelay_new) {
-                    INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Throughput too low, will delay: r_higher >= alfa5 * rho (%.3g >= %g * %.3g). Delay until beta = %.3g.", dash::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6, Bdelay_new);
+                    INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Throughput too low, will delay: r_higher >= alfa5 * rho (%.3g >= %g * %.3g). Delay until beta = %.3g.", dashp2p::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6, Bdelay_new);
                 } else {
-                    INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Throughput too low to increase: r_higher >= alfa5 * rho (%.3g >= %g * %.3g).", dash::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6);
+                    INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Throughput too low to increase: r_higher >= alfa5 * rho (%.3g >= %g * %.3g).", dashp2p::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6);
                 }
             }
             return Decision(bitRates.at(iLast), Bdelay_new * 1000000, NO2_DELAY);
         } else {
             /* don't delay */
-            INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Throughput high enough not to delay: r_higher < alfa5 * rho (%.3g < %g * %.3g).", dash::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6);
-            return Decision(bitRates.at(iLast), std::numeric_limits<dash::Usec>::max(), NO2_NODELAY);
+            INFOMSG("[%.3fs] beta in [Blow, Bhigh) (%.3g in [%g, %g)). Throughput high enough not to delay: r_higher < alfa5 * rho (%.3g < %g * %.3g).", dashp2p::Utilities::now(), beta, Blow, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6);
+            return Decision(bitRates.at(iLast), std::numeric_limits<int64_t>::max(), NO2_NODELAY);
         }
     }
 
@@ -645,29 +666,31 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
         /* check if throughput is enough for next higher encoding rate. */
         if(iLast == iHighest || bitRates.at(iLast + 1) >= alfa5 * rho) {
             /* delay */
-            dash::Usec Bdelay_new = 0;
+            int64_t Bdelay_new = 0;
             if(iLast == iHighest) {
             	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast), lastSegment.segmentIndex() + 1);
-                Bdelay_new = std::max<dash::Usec>(1000000 * (dash::Usec)beta - mpdWrapper->getSegmentDuration(nextSegment) - 1000000, 500000 * (dash::Usec)(Blow + Bhigh));
+                Bdelay_new = std::max<int64_t>(1000000 * (int64_t)beta - mpdWrapper->getSegmentDuration(nextSegment) - 1000000, 500000 * (int64_t)(Blow + Bhigh));
                 if(beta > Bdelay_new) {
-                    INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Already at highest bit-rate (%.3g). Delay until beta = %.3g.", dash::Utilities::now(), beta, Bhigh, bitRates.at(iHighest) / 1e6, Bdelay_new);
+                    INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Already at highest bit-rate (%.3g). Delay until beta = %.3g.", dashp2p::Utilities::now(), beta, Bhigh, bitRates.at(iHighest) / 1e6, Bdelay_new);
                 } else {
-                    INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Already at highest bit-rate (%.3g).", dash::Utilities::now(), beta, Bhigh, bitRates.at(iHighest) / 1e6);
+                    INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Already at highest bit-rate (%.3g).", dashp2p::Utilities::now(), beta, Bhigh, bitRates.at(iHighest) / 1e6);
                 }
             } else {
             	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast), lastSegment.segmentIndex() + 1);
-                Bdelay_new = std::max<dash::Usec>(1000000 * (dash::Usec)beta - mpdWrapper->getSegmentDuration(nextSegment), 500000 * (dash::Usec)(Blow + Bhigh));
+                Bdelay_new = std::max<int64_t>(1000000 * (int64_t)beta - mpdWrapper->getSegmentDuration(nextSegment), 500000 * (int64_t)(Blow + Bhigh));
                 if(beta > Bdelay_new) {
-                    INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher >= alfa5 * rho (%.3g >= %g * %.3g). Delay until beta = %.3g.", dash::Utilities::now(), beta, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6, Bdelay_new);
+                    INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher >= alfa5 * rho (%.3g >= %g * %.3g). Delay until beta = %.3g.", dashp2p::Utilities::now(), beta, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6, Bdelay_new);
                 } else {
-                    INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher >= alfa5 * rho (%.3g >= %g * %.3g).", dash::Utilities::now(), beta, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6);
+                    INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher >= alfa5 * rho (%.3g >= %g * %.3g).", dashp2p::Utilities::now(), beta, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6);
                 }
             }
             return Decision(bitRates.at(iLast), Bdelay_new, NO3_DELAY);
         } else {
             /* don't delay */
-            INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Throughput high enough to increase: r_higher < alfa5 * rho (%.3g < %g * %.3g).", dash::Utilities::now(), beta, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6);
-            return Decision(bitRates.at(iLast + 1), std::numeric_limits<dash::Usec>::max(), NO3_UP);
+            INFOMSG("[%.3fs] beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Throughput high enough to increase: r_higher < alfa5 * rho (%.3g < %g * %.3g).", dashp2p::Utilities::now(), beta, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6);
+            return Decision(bitRates.at(iLast + 1), std::numeric_limits<int64_t>::max(), NO3_UP);
         }
     }
+}
+
 }

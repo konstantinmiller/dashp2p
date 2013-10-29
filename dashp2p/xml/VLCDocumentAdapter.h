@@ -29,27 +29,25 @@
 # include "config.h"
 #endif
 
-#if DP2P_VLC == 1
+#if 0
 # include <vlc_common.h>
 # include <vlc_stream.h>
 # include <vlc_xml.h>
-#else
-# include <libxml/xmlreader.h>
 #endif
+#include <libxml/xmlreader.h>
 
-namespace dash {
+namespace dashp2p {
 
     namespace xml {
 
-        class VLCDocumentAdapter: public dash::xml::BasicDocument {
+        class VLCDocumentAdapter: public dashp2p::xml::BasicDocument {
         public:
-#if DP2P_VLC == 1
+#if 0
         	VLCDocumentAdapter(stream_t* p_stream): p_stream(p_stream), p_xml(NULL), p_xmlReader(NULL) {}
         	virtual ~VLCDocumentAdapter() {xml_ReaderDelete(p_xmlReader); xml_Delete(p_xml); stream_Delete(p_stream);}
-#else
+#endif
         	VLCDocumentAdapter(char* buffer, int size): buffer(buffer), size(size) {}
         	virtual ~VLCDocumentAdapter() {xmlFreeTextReader(p_xmlReader); delete[] buffer;}
-#endif
 
             virtual void parse(BasicDocumentHandler& handler);
 
@@ -59,46 +57,43 @@ namespace dash {
             void processElement(BasicDocumentHandler& handler, const std::string& name);
             void readAttributes(BasicDocumentHandler& handler);
 
-#if DP2P_VLC == 1
+#if 0
             stream_t* p_stream;
             xml_t*  p_xml;
             xml_reader_t* p_xmlReader;
-#else
+#endif
             char* buffer;
             int size;
             xmlTextReader* p_xmlReader;
-#endif
         };
 
 
 
 
-        class VLCDocumentAdapterFactory: public dash::xml::BasicDocumentFactory
+        class VLCDocumentAdapterFactory: public dashp2p::xml::BasicDocumentFactory
         {
 
         public:
-#if DP2P_VLC == 1
+#if 0
             VLCDocumentAdapterFactory(vlc_object_t* p_vlc): p_vlc_object(p_vlc) {}
             virtual ~VLCDocumentAdapterFactory() {p_vlc_object= NULL;}
-#else
+#endif
             VLCDocumentAdapterFactory() {}
             virtual ~VLCDocumentAdapterFactory() {}
-#endif
 
             /**
              * Takes the ownership of the memory buffer.
              * @param xml Will be deleted when the document is deleted.
              */
             virtual BasicDocument* createDocument(char *xml, int size) {
-#if DP2P_VLC == 1
+#if 0
             	// FIXME: is there an encoding problem?
             	return new VLCDocumentAdapter(stream_MemoryNew(p_vlc_object, (uint8_t*)xml, size, false));
-#else
-            	return new VLCDocumentAdapter(xml, size);
 #endif
+            	return new VLCDocumentAdapter(xml, size);
             }
         private:
-#if DP2P_VLC == 1
+#if 0
             vlc_object_t* p_vlc_object;
 #endif
         };

@@ -50,6 +50,7 @@ static Dp2pElement* data = NULL;
 static void dp2p_init(vlc_object_t *p_this)
 {
 	int fd = -1;
+	//assert(var_InheritString(p_this, "dashp2p-shm")); // for debugging
 	if(var_InheritString(p_this, "dashp2p-shm"))
 	    strcpy(shmName, var_InheritString(p_this, "dashp2p-shm"));
 	else
@@ -99,7 +100,7 @@ static void dp2p_cleanup()
 	FILE* f = fopen(buf, "w");
 	DP2P_ASSERT(f);
 	for(int i = 0; i < hdr->size; ++i) {
-		fprintf(f, "%"PRId64" %"PRId64" %"PRId64" %"PRId64" %"PRId64" %"PRId64" %"PRId64"\n",
+		fprintf(f, "%" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 "\n",
 		        data[i].ptsRel, data[i].ptsAbs, data[i].tsDemuxed, data[i].tsDecoded,
 		        data[i].tsPopped, data[i].tsDplFirst, data[i].tsDplLast);
 	}

@@ -24,24 +24,25 @@
 #define MPDWRAPPER_H_
 
 
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
 #include "mpd/model.h"
-#include <assert.h>
+#include <cassert>
 #include <map>
 #include <vector>
 #include <string>
 
+using std::pair;
 using std::map;
 using std::vector;
 using std::string;
-using dash::Usec;
+
+namespace dashp2p {
 
 class MpdId;
 class PeriodId;
 class AdaptationSetId;
 class RepresentationId;
 class SegmentId;
-
 
 class MpdWrapper
 {
@@ -62,7 +63,7 @@ public:
      * Returns the ID of the MPD or an empty string if the ID is not set.
      */
     string getMpdId() const {if(mpd->id.isSet()) return mpd->id.get(); else return string();}
-    dash::Usec getVideoDuration() const;
+    int64_t getVideoDuration() const;
 
     /**********************************************************************
      * Properties of a Period *********************************************
@@ -99,13 +100,13 @@ public:
      **********************************************************************/
 
     int getNumSegments(int periodIndex, int adaptationSetIndex, int representationIndex) const;
-    int getNumSegments(const dash::mpd::Representation& rep) const;
+    int getNumSegments(const dashp2p::mpd::Representation& rep) const;
     int getNumSegments(const RepresentationId& representationId) const;
     vector<SegmentId> getSegments(const RepresentationId& representationId) const;
-    Usec getNominalSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex) const;
-    Usec getNominalSegmentDuration(const dash::mpd::Representation& rep) const;
-    string getInitSegmentURL(const dash::mpd::Representation& rep) const;
-    dash::URL getInitSegmentUrl(const RepresentationId& representationId) const;
+    int64_t getNominalSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex) const;
+    int64_t getNominalSegmentDuration(const dashp2p::mpd::Representation& rep) const;
+    string getInitSegmentURL(const dashp2p::mpd::Representation& rep) const;
+    dashp2p::URL getInitSegmentUrl(const RepresentationId& representationId) const;
     ContentIdSegment getNextSegment(const ContentIdSegment& segId) const;
     pair<int, int> getSpatialResolution(const RepresentationId& representationId) const;
     int getBitrate(const RepresentationId& representationId) const;
@@ -116,39 +117,39 @@ public:
      * Properties of a Segment ********************************************
      **********************************************************************/
 
-    Usec getSegmentDuration(const ContentIdSegment& setId) const;
-    Usec getSegmentDuration(const dash::mpd::Representation& rep, int segmentIndex) const;
-    Usec getSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex, int segmentIndex) const;
-    Usec getPosition(const ContentIdSegment& segId, int64_t byte, int64_t segmentSize) const;
-    Usec getStartTime(const ContentIdSegment& segId) const;
-    Usec getEndTime(const ContentIdSegment& segId) const;
+    int64_t getSegmentDuration(const ContentIdSegment& setId) const;
+    int64_t getSegmentDuration(const dashp2p::mpd::Representation& rep, int segmentIndex) const;
+    int64_t getSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex, int segmentIndex) const;
+    int64_t getPosition(const ContentIdSegment& segId, int64_t byte, int64_t segmentSize) const;
+    int64_t getStartTime(const ContentIdSegment& segId) const;
+    int64_t getEndTime(const ContentIdSegment& segId) const;
 
     /**
      * Returns the URL of a segment.
      */
     string getSegmentURL(const ContentIdSegment& segId) const;
-    dash::URL getSegmentUrl(const SegmentId& segmentId) const;
+    dashp2p::URL getSegmentUrl(const SegmentId& segmentId) const;
 
 
 
 
 
-    //std::vector<dash::Usec> getSwitchingPoints(dash::Usec streamPosition, int num) const;
+    //std::vector<int64_t> getSwitchingPoints(int64_t streamPosition, int num) const;
     void outputVideoStatistics(const string& fileName) const;
 
 /* Privave methods */
 private:
-    const dash::mpd::Period& getPeriod(int periodIndex) const;
-    const dash::mpd::Period& getPeriod(const PeriodId& periodId) const;
-    const dash::mpd::AdaptationSet& getAdaptationSet(int periodIndex, int adaptationSetIndex) const;
-    const dash::mpd::AdaptationSet& getAdaptationSet(const AdaptationSetId& adaptationSetId) const;
-    const dash::mpd::Representation& getRepresentation(const RepresentationId& representationId) const;
-    const dash::mpd::Representation& getRepresentation(int periodIndex, int adaptationSetIndex, int representationIndex) const;
-    const dash::mpd::Representation& getRepresentationByBitrate(int periodIndex, int adaptationSetIndex, int bitRate) const;
+    const dashp2p::mpd::Period& getPeriod(int periodIndex) const;
+    const dashp2p::mpd::Period& getPeriod(const PeriodId& periodId) const;
+    const dashp2p::mpd::AdaptationSet& getAdaptationSet(int periodIndex, int adaptationSetIndex) const;
+    const dashp2p::mpd::AdaptationSet& getAdaptationSet(const AdaptationSetId& adaptationSetId) const;
+    const dashp2p::mpd::Representation& getRepresentation(const RepresentationId& representationId) const;
+    const dashp2p::mpd::Representation& getRepresentation(int periodIndex, int adaptationSetIndex, int representationIndex) const;
+    const dashp2p::mpd::Representation& getRepresentationByBitrate(int periodIndex, int adaptationSetIndex, int bitRate) const;
 
 /* Private members */
 private:
-    dash::mpd::MediaPresentationDescription* mpd;
+    dashp2p::mpd::MediaPresentationDescription* mpd;
 };
 
 
@@ -190,5 +191,7 @@ public:
 	bool isInitSegment() const {return (segmentIndex == 0);}
 	int segmentIndex;
 };
+
+}
 
 #endif /* MPDWRAPPER_H_ */

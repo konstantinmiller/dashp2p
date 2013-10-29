@@ -25,7 +25,7 @@
 #include <stdexcept>
 #include <sstream>
 
-namespace dash {
+namespace dashp2p {
     namespace util {
         double stringToDouble(const std::string& value, const std::locale& locale) throw() {
             std::istringstream stream;

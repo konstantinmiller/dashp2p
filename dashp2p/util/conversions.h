@@ -26,7 +26,7 @@
 #include <string>
 #include <locale>
 
-namespace dash {
+namespace dashp2p {
     namespace util {
         bool stringToBool(const std::string& value) throw();
         unsigned int stringToUnsignedInt(const std::string& value) throw();

@@ -23,17 +23,11 @@
 #ifndef CONTROLLOGIC_H_
 #define CONTROLLOGIC_H_
 
-
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
+#include "dashp2p.h"
 #include "Contour.h"
-#include "ControlLogicActionStartDownload.h"
-#include "ControlLogicEventConnected.h"
-#include "ControlLogicEventDataPlayed.h"
-#include "ControlLogicEventDataReceived.h"
-#include "ControlLogicEventDisconnect.h"
-#include "ControlLogicEventPause.h"
-#include "ControlLogicEventResumePlayback.h"
-#include "ControlLogicEventStartPlayback.h"
+#include "ControlLogicAction.h"
+#include "ControlLogicEvent.h"
 #include "ThreadAdapter.h"
 #include "MpdWrapper.h"
 #include "DataField.h"
@@ -44,13 +38,15 @@ using std::vector;
 using std::list;
 using std::map;
 
+namespace dashp2p {
+
 class ControlLogic
 {
 
 /* Constructor, destructor */
 protected:
 
-	ControlLogic(int width, int height, Usec startPosition, Usec stopPosition);
+	ControlLogic(int width, int height);
 
 /* Public methods */
 public:
@@ -60,7 +56,7 @@ public:
     virtual ControlType getType() const = 0;
 
     virtual list<ControlLogicAction*> processEvent(ControlLogicEvent* e);
-    virtual list<ControlLogicAction*> actionRejected(ControlLogicAction* a);
+    //virtual list<ControlLogicAction*> actionRejected(ControlLogicAction* a);
 
     virtual int getStartSegment() const;
     virtual int getStopSegment() const;
@@ -68,7 +64,7 @@ public:
     virtual const MpdWrapper* getMpdWrapper() const {return mpdWrapper;}
     virtual const Contour& getContour() const {return contour;}
 
-    virtual void setStartPosition(Usec startPosition) {this->startPosition = startPosition;}
+    //virtual void setStartPosition(int64_t startPosition) {this->startPosition = startPosition;}
 
 /* Protected methods */
 protected:
@@ -77,19 +73,19 @@ protected:
     virtual list<ControlLogicAction*> processEventDataPlayed          (const ControlLogicEventDataPlayed& e)     = 0;
     virtual list<ControlLogicAction*> processEventDataReceived        (ControlLogicEventDataReceived& e);
     virtual list<ControlLogicAction*> processEventDataReceivedMpd     (ControlLogicEventDataReceived& e)         = 0;
-    virtual list<ControlLogicAction*> processEventDataReceivedMpdPeer (ControlLogicEventDataReceived& e)         = 0;
+    //virtual list<ControlLogicAction*> processEventDataReceivedMpdPeer (ControlLogicEventDataReceived& e)         = 0;
     virtual list<ControlLogicAction*> processEventDataReceivedSegment (ControlLogicEventDataReceived& e)         = 0;
-    virtual list<ControlLogicAction*> processEventDataReceivedTracker (ControlLogicEventDataReceived& e)         = 0;
-    virtual list<ControlLogicAction*> processEventDisconnect          (const ControlLogicEventDisconnect& e)     = 0;
-    virtual list<ControlLogicAction*> processEventPause               (const ControlLogicEventPause& e)          = 0;
-    virtual list<ControlLogicAction*> processEventResumePlayback      (const ControlLogicEventResumePlayback& e) = 0;
+    //virtual list<ControlLogicAction*> processEventDataReceivedTracker (ControlLogicEventDataReceived& e)         = 0;
+    //virtual list<ControlLogicAction*> processEventDisconnect          (const ControlLogicEventDisconnect& e)     = 0;
+    //virtual list<ControlLogicAction*> processEventPause               (const ControlLogicEventPause& e)          = 0;
+    //virtual list<ControlLogicAction*> processEventResumePlayback      (const ControlLogicEventResumePlayback& e) = 0;
     virtual list<ControlLogicAction*> processEventStartPlayback       (const ControlLogicEventStartPlayback& e)  = 0;
 
     virtual bool ackActionConnected        (const ConnectionId& connId);
     virtual bool ackActionRequestCompleted (const ContentId& contentId);
     virtual bool ackActionDisconnect       (const ConnectionId& connId);
 
-    virtual list<ControlLogicAction*> actionRejectedStartDownload(ControlLogicActionStartDownload* a) = 0;
+    //virtual list<ControlLogicAction*> actionRejectedStartDownload(ControlLogicActionStartDownload* a) = 0;
 
     virtual IfData getInitialIf() const {return ifData.at(0);}
 
@@ -110,9 +106,6 @@ protected:
     int width;
     int height;
 
-    Usec startPosition;      // [us]
-    Usec stopPosition;       // [us]
-
     /* Stores the vector of available representations. Assumes it to be sorted in ascending order. */
     vector<int> bitRates;
 
@@ -125,5 +118,7 @@ protected:
 
     ActionList pendingActions;
 };
+
+}
 
 #endif /* CONTROLLOGIC_H_ */

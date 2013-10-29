@@ -23,9 +23,20 @@
 #ifndef CONTROLLOGICACTION_H_
 #define CONTROLLOGICACTION_H_
 
-#include "Dashp2pTypes.h"
+#include "dashp2p.h"
+//#include "Dashp2pTypes.h"
+#include "ContentId.h"
+#include "Utilities.h"
+//using dashp2p::Utilities;
+
 #include <string>
+#include <sstream>
+#include <list>
+using std::ostringstream;
+using std::list;
 using std::string;
+
+namespace dashp2p {
 
 class ControlLogicAction
 {
@@ -35,5 +46,55 @@ public:
     virtual ControlLogicActionType getType() const = 0;
     virtual string toString() const = 0;
 };
+
+
+class ControlLogicActionCloseTcpConnection: public ControlLogicAction
+{
+public:
+	ControlLogicActionCloseTcpConnection(const int& tcpConnectionId): ControlLogicAction(), tcpConnectionId(tcpConnectionId) {}
+    virtual ~ControlLogicActionCloseTcpConnection(){}
+    virtual ControlLogicAction* copy() const {return new ControlLogicActionCloseTcpConnection(tcpConnectionId);}
+    virtual ControlLogicActionType getType() const {return Action_CloseTcpConnection;}
+    virtual string toString() const {ostringstream ret; ret << "CloseTcpConnection " << tcpConnectionId; return ret.str();}
+public:
+    const int tcpConnectionId;
+};
+
+
+class ControlLogicActionOpenTcpConnection: public ControlLogicAction
+{
+public:
+	ControlLogicActionOpenTcpConnection(const int& tcpConnectionId): ControlLogicAction(), tcpConnectionId(tcpConnectionId) {}
+    virtual ~ControlLogicActionOpenTcpConnection(){}
+    virtual ControlLogicAction* copy() const {return new ControlLogicActionOpenTcpConnection(tcpConnectionId);}
+    virtual ControlLogicActionType getType() const {return Action_CreateTcpConnection;}
+    virtual string toString() const {ostringstream ret; ret << "CreateTcpConnection " << tcpConnectionId; return ret.str();}
+public:
+    const int tcpConnectionId;
+    //const IfData ifData;
+    //const string hostName;
+    //const int maxPendingRequests;
+    //const int port = 80;
+};
+
+
+class ControlLogicActionStartDownload: public ControlLogicAction
+{
+public:
+    ControlLogicActionStartDownload(const int& tcpConnectionId, list<const ContentId*> contentIds, list<dashp2p::URL> urls, list<HttpMethod> httpMethods)
+      : ControlLogicAction(), tcpConnectionId(tcpConnectionId), contentIds(contentIds), urls(urls), httpMethods(httpMethods) {}
+    virtual ~ControlLogicActionStartDownload() {while(!contentIds.empty()){delete contentIds.front(); contentIds.pop_front();}}
+    virtual ControlLogicAction* copy() const;
+    virtual ControlLogicActionType getType() const {return Action_StartDownload;}
+    virtual string toString() const;
+    virtual bool operator==(const ControlLogicActionStartDownload& other) const;
+public:
+    const int tcpConnectionId;
+    list<const ContentId*> contentIds;
+    list<dashp2p::URL> urls;
+    list<HttpMethod> httpMethods;
+};
+
+}
 
 #endif /* CONTROLLOGICACTION_H_ */

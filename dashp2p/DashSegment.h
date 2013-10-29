@@ -23,28 +23,29 @@
 #ifndef DASHSEGMENT_H_
 #define DASHSEGMENT_H_
 
-#include "ContentIdSegment.h"
+#include "ContentId.h"
 #include "DataField.h"
 #include "Utilities.h"
 #include <string>
 using std::string;
 using std::pair;
 
+namespace dashp2p {
 
 /* Type for storing information about a segment. */
 class DashSegment
 {
 /* Public methods */
 public:
-    DashSegment(const ContentIdSegment& segId, int64_t numBytes, dash::Usec duration);
+    DashSegment(const ContentIdSegment& segId, int64_t numBytes, int64_t duration);
     ~DashSegment(){}
     void setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite);
-    pair<dash::Usec, int64_t> getData(int64_t offset, char* buffer, int bufferSize) const;
+    pair<int64_t, int64_t> getData(int64_t offset, char* buffer, int bufferSize) const;
     int64_t getTotalSize() const;
-    dash::Usec getTotalDuration() const {return duration;}
+    int64_t getTotalDuration() const {return duration;}
     bool completed() const {return dataField.full();}
     bool hasData(int64_t byteNr) const {return dataField.isOccupied(byteNr);}
-    pair<dash::Usec, int64_t> getContigInterval(int64_t offset) const;
+    pair<int64_t, int64_t> getContigInterval(int64_t offset) const;
     string printDownloadedData(int64_t offset) const {return dataField.printDownloadedData(offset);}
     void toFile(string& fileName) const;
 
@@ -54,6 +55,9 @@ public:
 /* Private members */
 private:
     DataField dataField;
-    const dash::Usec duration;
+    const int64_t duration;
 };
+
+}
+
 #endif /* DASHSEGMENT_H_ */

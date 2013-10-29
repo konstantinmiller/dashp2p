@@ -23,41 +23,41 @@
 #ifndef TIMESERIES_H_
 #define TIMESERIES_H_
 
-#define __STDC_FORMAT_MACROS
-
 #include "DebugAdapter.h"
 #include "Utilities.h"
 #include <limits>
 #include <list>
 #include <vector>
 #include <string>
-#include <inttypes.h>
+//#define __STDC_FORMAT_MACROS
+//#include <cinttypes>
 using std::numeric_limits;
 using std::pair;
 using std::list;
 using std::vector;
 using std::string;
 
+namespace dashp2p {
 
 template <class T>
 class TimeSeries
 {
 /* Private methods */
 public:
-    TimeSeries(dash::Usec discrStep, bool recordingAll, bool recordingDiscrMin);
+    TimeSeries(int64_t discrStep, bool recordingAll, bool recordingDiscrMin);
     virtual ~TimeSeries(){}
-    void pushBack(dash::Usec time, const T& x);
+    void pushBack(int64_t time, const T& x);
     bool minIncreasing() const {return isMinIncreasing;}
     string printDiscretizedMin() const;
 
 /* Private types */
 private:
-    typedef pair<dash::Usec, T> Element;
+    typedef pair<int64_t, T> Element;
 
 /* Private members */
 private:
     static const unsigned vecSize;
-    const dash::Usec discrStep;
+    const int64_t discrStep;
     const bool recordingAll;
     const bool recordingDiscrMin;
     list<vector<Element> > data;
@@ -65,8 +65,8 @@ private:
     bool isMinIncreasing;
     T lastMinValue;
     T curMinValue;
-    dash::Usec curStepNr; // minimum number of the step we are expecting next element to be in
-    dash::Usec lastTime;
+    int64_t curStepNr; // minimum number of the step we are expecting next element to be in
+    int64_t lastTime;
 };
 
 
@@ -76,7 +76,7 @@ const unsigned TimeSeries<T>::vecSize = 1024;
 
 
 template <class T>
-TimeSeries<T>::TimeSeries(dash::Usec discrStep, bool recordingAll, bool recordingDiscrMin)
+TimeSeries<T>::TimeSeries(int64_t discrStep, bool recordingAll, bool recordingDiscrMin)
 : discrStep(discrStep),
   recordingAll(recordingAll),
   recordingDiscrMin(recordingDiscrMin),
@@ -92,11 +92,11 @@ TimeSeries<T>::TimeSeries(dash::Usec discrStep, bool recordingAll, bool recordin
   }
 
 template <class T>
-void TimeSeries<T>::pushBack(dash::Usec time, const T& x)
+void TimeSeries<T>::pushBack(int64_t time, const T& x)
 {
-    DBGMSG("Enter. Time: %"PRId64" us, level: %"PRId64" us.", time, x);
+    DBGMSG("Enter. Time: %" PRId64 " us, level: %" PRId64 " us.", time, x);
 
-    dp2p_assert_v(time >= lastTime, "time: %"PRId64", lastTime: %"PRId64, time, lastTime);
+    dp2p_assert_v(time >= lastTime, "time: %" PRId64 ", lastTime: %" PRId64, time, lastTime);
     lastTime = time;
 
     /* Are we recording everything? */
@@ -130,7 +130,7 @@ void TimeSeries<T>::pushBack(dash::Usec time, const T& x)
     /* Is this the first value? */
     if(curStepNr == -1)
     {
-        DBGMSG("Received first value: (%"PRId64", %"PRId64").", time, x);
+        DBGMSG("Received first value: (%" PRId64 ", %" PRId64 ").", time, x);
         curStepNr = time / discrStep;
         curMinValue = x;
     }
@@ -138,14 +138,14 @@ void TimeSeries<T>::pushBack(dash::Usec time, const T& x)
     /* Are we still in the same discrete step? If yes, update the curMinValue. */
     else if(time < (curStepNr + 1) * discrStep)
     {
-        DBGMSG("Same step: %"PRId64". Updating the minimum from %"PRId64" to %"PRId64".", curStepNr, curMinValue, std::min<T>(x, curMinValue));
+        DBGMSG("Same step: %" PRId64 ". Updating the minimum from %" PRId64 " to %" PRId64 ".", curStepNr, curMinValue, std::min<T>(x, curMinValue));
         curMinValue = std::min<T>(x, curMinValue);
     }
 
     /* Did we cross the discrete step boundary? */
     else
     {
-        DBGMSG("Last step: %"PRId64", new step: %"PRId64". Last min value: %"PRId64", current min value: %"PRId64".", curStepNr, time / discrStep, lastMinValue, curMinValue);
+        DBGMSG("Last step: %" PRId64 ", new step: %" PRId64 ". Last min value: %" PRId64 ", current min value: %" PRId64 ".", curStepNr, time / discrStep, lastMinValue, curMinValue);
 
         for(unsigned i = curStepNr; i < time / discrStep; ++i)
             dataDiscrMin.push_back(Element(curStepNr * discrStep, curMinValue));
@@ -177,6 +177,8 @@ string TimeSeries<T>::printDiscretizedMin() const
     ret.erase(ret.size() - 3);
 
     return ret;
+}
+
 }
 
 #endif /* TIMESERIES_H_ */

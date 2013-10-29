@@ -37,6 +37,8 @@
 # include <sys/shm.h>
 #endif
 
+namespace dashp2p {
+
 Thread OverlayAdapter::thread;
 bool OverlayAdapter::terminating = false;
 bool OverlayAdapter::initialized = false;
@@ -260,7 +262,7 @@ void* OverlayAdapter::mainThread(void*)
         ThreadAdapter::mutexLock(&mutex);
         if(std::find(dirty.begin(), dirty.end(), true) == dirty.end()) {
             DBGMSG("Will wait for overlay output.");
-            int ret = ThreadAdapter::condVarTimedWait(&condVar, &mutex, dash::Utilities::getAbsTime() + 1000000);
+            int ret = ThreadAdapter::condVarTimedWait(&condVar, &mutex, dashp2p::Utilities::getAbsTime() + 1000000);
             if(terminating) {
                 DBGMSG("Overlay got terminatingn signal.");
                 ThreadAdapter::mutexUnlock(&mutex);
@@ -368,4 +370,6 @@ void OverlayAdapter::print(int line, const char* format, ...)
 
     ThreadAdapter::mutexUnlock(&mutex);
 #endif
+}
+
 }

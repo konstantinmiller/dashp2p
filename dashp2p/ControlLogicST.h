@@ -23,7 +23,7 @@
 #ifndef CONTROLLOGICST_H_
 #define CONTROLLOGICST_H_
 
-
+#include "dashp2p.h"
 #include "ControlLogic.h"
 #include "TimeSeries.h"
 #include <string>
@@ -33,9 +33,19 @@ using std::string;
 using std::vector;
 using std::set;
 
-
 /**
- * Performs the adaptation as in the ST paper.
+ * Performs the adaptation as in
+ *     "Adaptation Algorithm for Adaptive Streaming over HTTP",
+ *     K Miller, E Quacchio, G Gennari, A Wolisz,
+ *     IEEE 19th International Packet Video Workshop (PV 2012),
+ *     May 2012, Munich, Germany
+ *
+ * The adaptation algorithm is subject to a pending patent application by STMicroelectronics:
+ *     "Media-quality adaptation mechanisms for dynamic adaptive streaming"
+ *     Inventors: Konstantin Miller, Emanuele Quacchio,
+ *     Publication date: 2013/2/25
+ *     Patent office: US
+ *     Application number: 13/775,885
  *
  * Configuration parameters:
  *   o Delta_t - time window for averaging throughput
@@ -60,11 +70,13 @@ using std::set;
  *   o r_next              - Next represenation
  */
 
+namespace dashp2p {
+
 class ControlLogicST: public ControlLogic
 {
 /* Public methods */
 public:
-    ControlLogicST(int width, int height, Usec startPosition, Usec stopPosition, const string& config);
+    ControlLogicST(int width, int height, const string& config);
     virtual ~ControlLogicST();
     virtual ControlType getType() const {return ControlType_ST;}
 
@@ -77,7 +89,7 @@ private:
     public:
         Decision(const int bitRate, double Bdelay, int reason) : bitRate(bitRate), Bdelay(Bdelay), reason(reason) {}
         int            bitRate;
-        dash::Usec     Bdelay;
+        int64_t     Bdelay;
         int            reason; // for debugging/logging purposes
     };
 
@@ -87,15 +99,15 @@ private:
     virtual list<ControlLogicAction*> processEventConnected           (const ControlLogicEventConnected& e);
     virtual list<ControlLogicAction*> processEventDataPlayed          (const ControlLogicEventDataPlayed& e);
     virtual list<ControlLogicAction*> processEventDataReceivedMpd     (ControlLogicEventDataReceived& e);
-    virtual list<ControlLogicAction*> processEventDataReceivedMpdPeer (ControlLogicEventDataReceived& /*e*/) {abort(); return list<ControlLogicAction*>();}
+    //virtual list<ControlLogicAction*> processEventDataReceivedMpdPeer (ControlLogicEventDataReceived& /*e*/) {abort(); return list<ControlLogicAction*>();}
     virtual list<ControlLogicAction*> processEventDataReceivedSegment (ControlLogicEventDataReceived& e);
-    virtual list<ControlLogicAction*> processEventDataReceivedTracker (ControlLogicEventDataReceived& /*e*/) {abort(); return list<ControlLogicAction*>();}
-    virtual list<ControlLogicAction*> processEventDisconnect          (const ControlLogicEventDisconnect& e);
-    virtual list<ControlLogicAction*> processEventPause               (const ControlLogicEventPause& e);
-    virtual list<ControlLogicAction*> processEventResumePlayback      (const ControlLogicEventResumePlayback& e);
+    //virtual list<ControlLogicAction*> processEventDataReceivedTracker (ControlLogicEventDataReceived& /*e*/) {abort(); return list<ControlLogicAction*>();}
+    //virtual list<ControlLogicAction*> processEventDisconnect          (const ControlLogicEventDisconnect& e);
+    //virtual list<ControlLogicAction*> processEventPause               (const ControlLogicEventPause& e);
+    //virtual list<ControlLogicAction*> processEventResumePlayback      (const ControlLogicEventResumePlayback& e);
     virtual list<ControlLogicAction*> processEventStartPlayback       (const ControlLogicEventStartPlayback& e);
 
-    virtual list<ControlLogicAction*> actionRejectedStartDownload(ControlLogicActionStartDownload* a);
+    //virtual list<ControlLogicAction*> actionRejectedStartDownload(ControlLogicActionStartDownload* a);
 
     /* Selects the representation for the next segment and the buffer level when the download should be started (Inf, if immediately). */
     Decision selectRepresentation(bool ifBetaMinIncreasing, double beta,
@@ -115,7 +127,7 @@ private:
     double Delta_t;
     int fetchHeads;
 
-    TimeSeries<dash::Usec>* betaTimeSeries;
+    TimeSeries<int64_t>* betaTimeSeries;
 
     /* Indicates if we are in the initial increase phase. */
     bool initialIncrease;
@@ -123,12 +135,13 @@ private:
     /* Time when the initial increase phase was terminated. */
     double initialIncreaseTerminationTime;
 
-    dash::Usec Bdelay;
+    int64_t Bdelay;
     list<const ContentId*> delayedRequests;
 
     int connId;
-    dash::URL mpdUrl;
+    dashp2p::URL mpdUrl;
 };
 
+}
 
 #endif /* CONTROLLOGICST_H_ */

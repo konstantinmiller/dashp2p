@@ -30,6 +30,7 @@
 using std::map;
 using std::string;
 
+namespace dashp2p {
 
 class DataField
 {
@@ -65,5 +66,7 @@ private:
     int64_t occupiedSize;
     DataMap dataMap;
 };
+
+}
 
 #endif /* DATAFIELD_H_ */

@@ -20,16 +20,18 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
  ****************************************************************************/
 
+#include "dashp2p.h"
 #include "Utilities.h"
 #include "DebugAdapter.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <string.h>
-#include <inttypes.h>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
+#include <cstring>
+//#include <cinttypes>
 
+namespace dashp2p {
 
-bool dash::operator>=(const struct timespec& a, const struct timespec& b)
+bool operator>=(const struct timespec& a, const struct timespec& b)
 {
     if(a.tv_sec > b.tv_sec) {
         return true;
@@ -40,7 +42,7 @@ bool dash::operator>=(const struct timespec& a, const struct timespec& b)
     }
 }
 
-bool dash::operator>(const struct timespec& a, const dash::Usec& b)
+bool operator>(const struct timespec& a, const int64_t& b)
 {
     if(a.tv_sec > b / 1000000ll) {
         return true;
@@ -51,7 +53,7 @@ bool dash::operator>(const struct timespec& a, const dash::Usec& b)
     }
 }
 
-struct timespec dash::operator+(const struct timespec& a, const struct timespec& b)
+struct timespec operator+(const struct timespec& a, const struct timespec& b)
 {
     struct timespec ret;
     ret.tv_nsec = (a.tv_nsec + b.tv_nsec) % 1000000000ll;
@@ -61,7 +63,7 @@ struct timespec dash::operator+(const struct timespec& a, const struct timespec&
     return ret;
 }
 
-struct timespec dash::operator-(const struct timespec& a, const struct timespec& b)
+struct timespec operator-(const struct timespec& a, const struct timespec& b)
 {
     dp2p_assert(a >= b);
     struct timespec ret;
@@ -76,7 +78,7 @@ struct timespec dash::operator-(const struct timespec& a, const struct timespec&
 }
 
 
-const dash::URL& dash::URL::operator=(const dash::URL& other)
+const URL& URL::operator=(const URL& other)
 {
     if(&other == this)
         return *this;
@@ -93,27 +95,27 @@ const dash::URL& dash::URL::operator=(const dash::URL& other)
 /*************************************************************************
  * Time
  *************************************************************************/
-dash::Usec dash::Utilities::referenceTime = 0;
+int64_t Utilities::referenceTime = 0;
 
-dash::Usec dash::Utilities::getTime()
+int64_t Utilities::getTime()
 {
     return getAbsTime() - referenceTime;
 }
 
-dash::Usec dash::Utilities::getAbsTime()
+int64_t Utilities::getAbsTime()
 {
     struct timespec ts;
     dp2p_assert(0 == clock_gettime(CLOCK_REALTIME, &ts));
-    return (Usec)1000000 * (Usec)ts.tv_sec + (Usec)ts.tv_nsec / (Usec)1000;
+    return (int64_t)1000000 * (int64_t)ts.tv_sec + (int64_t)ts.tv_nsec / (int64_t)1000;
 }
 
-std::string dash::Utilities::getTimeString(Usec t, bool showDate)
+std::string Utilities::getTimeString(int64_t t, bool showDate)
 {
     static char buf[1024];
     time_t _t;
-    Usec usecs = 0;
+    int64_t usecs = 0;
     if(t == 0) {
-        Usec absTime = getAbsTime();
+        int64_t absTime = getAbsTime();
         _t = absTime / 1000000;
         usecs = absTime % 1000000;
     } else {
@@ -126,11 +128,11 @@ std::string dash::Utilities::getTimeString(Usec t, bool showDate)
     	dp2p_assert(strftime(buf, 1024, "%d.%m.%Y %H:%M:%S", &T) + 2 < 1024); // + 2 in order to ensure that nothing was truncated
     else
     	dp2p_assert(strftime(buf, 1024, "%H:%M:%S", &T) + 2 < 1024); // + 2 in order to ensure that nothing was truncated
-    sprintf(buf + strlen(buf), ".%06"PRId64, usecs);
+    sprintf(buf + strlen(buf), ".%06" PRId64, usecs);
     return std::string(buf);
 }
 
-std::string dash::Utilities::getTimeString(const struct timespec& t, bool showDate)
+std::string Utilities::getTimeString(const struct timespec& t, bool showDate)
 {
     static char buf[1024];
     time_t secs = t.tv_sec;
@@ -144,12 +146,12 @@ std::string dash::Utilities::getTimeString(const struct timespec& t, bool showDa
     return std::string(buf);
 }
 
-double dash::Utilities::now()
+double Utilities::now()
 {
     return getTime() / 1e6;
 }
 
-dash::Usec dash::Utilities::convertTime2Epoch(const string& str)
+int64_t Utilities::convertTime2Epoch(const string& str)
 {
     int h = -1;
     int m = -1;
@@ -164,10 +166,10 @@ dash::Usec dash::Utilities::convertTime2Epoch(const string& str)
     T.tm_hour = h;
     T.tm_min = m;
     T.tm_sec = s;
-    return (Usec)1000000 * (Usec)mktime(&T);
+    return (int64_t)1000000 * (int64_t)mktime(&T);
 }
 
-dash::Usec dash::Utilities::convertTime(const string& str)
+int64_t Utilities::convertTime(const string& str)
 {
     int h = -1;
     int m = -1;
@@ -176,10 +178,10 @@ dash::Usec dash::Utilities::convertTime(const string& str)
         ERRMSG("Could not convert time string [%s] to relative time.", str.c_str());
         abort();
     }
-    return (Usec)(h * 3600 + m * 60 + s) * (Usec)1000000;
+    return (int64_t)(h * 3600 + m * 60 + s) * (int64_t)1000000;
 }
 
-struct timespec dash::Utilities::add(const struct timespec& a, const Usec& usec)
+struct timespec Utilities::add(const struct timespec& a, const int64_t& usec)
 {
     struct timespec ret;
     ret.tv_nsec = (a.tv_nsec + (usec % 1000000ll) * 1000ll) % 1000000000ll;
@@ -189,10 +191,18 @@ struct timespec dash::Utilities::add(const struct timespec& a, const Usec& usec)
     return ret;
 }
 
+struct timeval Utilities::usec2tv(const int64_t& usec)
+{
+	struct timeval ret;
+	ret.tv_sec = usec / (int64_t)1000000;
+	ret.tv_usec = usec % (int64_t)1000000;
+	return ret;
+}
+
 /*************************************************************************
  * Sleeping
  *************************************************************************/
-void dash::Utilities::sleepSelect(unsigned sec, unsigned usec)
+void Utilities::sleepSelect(unsigned sec, unsigned usec)
 {
     dp2p_assert(usec < 1000000);
     struct timeval timeout;
@@ -205,16 +215,16 @@ void dash::Utilities::sleepSelect(unsigned sec, unsigned usec)
 /*************************************************************************
  * Random numbers
  *************************************************************************/
-unsigned short dash::Utilities::randState[3] = {0,0,0};
+unsigned short Utilities::randState[3] = {0,0,0};
 
-int dash::Utilities::getRandInt (int a, int b)
+int Utilities::getRandInt (int a, int b)
 {
     if( a == b ) {
         return a;
     }
     dp2p_assert( a < b );
     if( randState[0] == 0 && randState[1] == 0 && randState[2] == 0 ) {
-        Usec tmp = getTime();
+        int64_t tmp = getTime();
         randState[0] = tmp >> 32;
         randState[1] = tmp >> 16;
         randState[2] = tmp;
@@ -227,12 +237,12 @@ int dash::Utilities::getRandInt (int a, int b)
 /*************************************************************************
  * String manipulation
  *************************************************************************/
-const std::string dash::Utilities::emptyString;
+const std::string Utilities::emptyString;
 
-dash::URL dash::Utilities::splitURL(const std::string& url)
+URL Utilities::splitURL(const std::string& url)
 {
     if(url.empty())
-        return dash::URL();
+        return URL();
 
     /* get the access type */
     std::string access;
@@ -261,9 +271,9 @@ dash::URL dash::Utilities::splitURL(const std::string& url)
     //printf("Splitting %s into (%s, %s, %s, %s)\n", url.c_str(), access.c_str(), hostName.c_str(), path.c_str(), fileName.c_str());
 
     /* return */
-    return dash::URL(access, hostName, path, fileName);
+    return URL(access, hostName, path, fileName);
 }
-dash::Utilities::PeerInformation dash::Utilities::splitIPStringMPDPeer(const std::string& ipString)
+Utilities::PeerInformation Utilities::splitIPStringMPDPeer(const std::string& ipString)
 {
 	struct PeerInformation actualPeerInfo;
 	std::string portString;
@@ -272,7 +282,7 @@ dash::Utilities::PeerInformation dash::Utilities::splitIPStringMPDPeer(const std
 	actualPeerInfo.ip = ipString.substr(0,i);
 	return actualPeerInfo;
 }
-void dash::Utilities::getRandomString(char* buffer, int len)
+void Utilities::getRandomString(char* buffer, int len)
 {
     for (int i = 0; i < len - 1; ++i) {
         int randomChar = rand()%(26+26+10);
@@ -286,12 +296,12 @@ void dash::Utilities::getRandomString(char* buffer, int len)
     buffer[len - 1] = 0;
 }
 
-bool dash::Utilities::isAbsoluteUrl(const std::string& url)
+bool Utilities::isAbsoluteUrl(const std::string& url)
 {
     return url.compare(0, 7, "http://") == 0;
 }
 
-std::vector<std::string> dash::Utilities::tokenize(const std::string& str, char sep)
+std::vector<std::string> Utilities::tokenize(const std::string& str, char sep)
 {
     std::vector<std::string> ret;
 
@@ -310,7 +320,7 @@ std::vector<std::string> dash::Utilities::tokenize(const std::string& str, char 
     return ret;
 }
 
-string dash::Utilities::toString(const HttpMethod& httpMethod)
+string Utilities::toString(const HttpMethod& httpMethod)
 {
 	switch(httpMethod) {
 	case HttpMethod_GET:  return "GET";
@@ -320,7 +330,7 @@ string dash::Utilities::toString(const HttpMethod& httpMethod)
 }
 
 #if 0
-void dash::Utilities::replaceHostName(std::string& url, const std::string& newHostName)
+void Utilities::replaceHostName(std::string& url, const std::string& newHostName)
 {
     unsigned start = url.find("://");
     dp2p_assert(start != url.npos);
@@ -333,3 +343,5 @@ void dash::Utilities::replaceHostName(std::string& url, const std::string& newHo
     url.replace(start, end - start + 1, newHostName);
 }
 #endif
+
+}

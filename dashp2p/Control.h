@@ -23,6 +23,7 @@
 #ifndef CONTROL_H_
 #define CONTROL_H_
 
+#include "dashp2p.h"
 #include "mpd/model.h"
 #include "MpdWrapper.h"
 #include "DebugAdapter.h"
@@ -30,13 +31,8 @@
 #include "SegmentStorage.h"
 #include "Contour.h"
 #include "ControlLogic.h"
-#include "ControlLogicActionCloseTcpConnection.h"
-#include "ControlLogicActionCreateTcpConnection.h"
-#include "ControlLogicActionStartDownload.h"
-#include "HttpEventConnected.h"
-#include "HttpEventDataReceived.h"
-#include "HttpEventDisconnect.h"
-#include "HttpRequest.h"
+#include "ControlLogicAction.h"
+#include "HttpEvent.h"
 
 #include <vlc_common.h>
 #include <string>
@@ -47,6 +43,7 @@
 using std::map;
 using std::set;
 
+namespace dashp2p {
 
 class Control
 {
@@ -58,15 +55,16 @@ protected:
 public:
 
     /* Initialization and clean-up */
-    static void init(const std::string& mpdUrl, int windowWidth, int windowHeight, dash::Usec startPosition, dash::Usec stopPosition, dash::Usec startTime, dash::Usec stopTime, ControlType controlType, std::string adaptationConfiguration, bool withHandover);
+    static void init(const std::string& mpdUrl, int windowWidth, int windowHeight,
+    		ControlType controlType, std::string adaptationConfiguration /*, bool withHandover*/);
     static void cleanUp();
 
     /* Main loop of the Control thread. */
     static void* controlThreadMain(void* params);
 
     /* Playback control */
-    static void prepareToPause();
-    static void pause();
+    //static void prepareToPause();
+    //static void pause();
 
     /* Callback for data downloaded by DashHttp. Don't call any DashHttp methods from this call because of internal DashHttp mutexes (might cause dead lock). */
     static void httpCb(HttpEvent* e);
@@ -81,17 +79,17 @@ public:
      * @param secReturned Approximate number of seconds returned.
      * @return 0 if EOF, otherwise 1.
      */
-    static int vlcCb(char** buffer, int* bufferSize, int* bytesReturned, dash::Usec* usecReturned);
+    static int vlcCb(char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned);
 
     /* Stream related stuff */
-    static dash::URL& getMpdUrl() {return splittedMpdUrl;}
-    static dash::Usec getPosition();
-    static std::vector<dash::Usec> getSwitchingPoints(int num);
+    static dashp2p::URL& getMpdUrl() {return splittedMpdUrl;}
+    static int64_t getPosition();
+    static std::vector<int64_t> getSwitchingPoints(int num);
     //static unsigned getLowestBitrate() {return representations.at(0).bandwidth;}
     //static int getStartSegment() {return startSegment;}
 
     /* Handover related stuff */
-    static void receiveDisplayHandover(const std::string& mpdUrl, dash::Usec startPosition, dash::Usec startTime);
+    //static void receiveDisplayHandover(const std::string& mpdUrl, int64_t startPosition, int64_t startTime);
 
     /* Overlay related stuff */
     static void displayThroughputOverlay(int segNr, double t, double thrpt);
@@ -103,17 +101,17 @@ protected:
 
     static pair<bool,bool> waitSelect(struct timeval selectTimeout);
 
-    static void httpConnected(const HttpEventConnected& e);
+    //static void httpConnected(const HttpEventConnected& e);
     static void httpDataReceived(HttpEventDataReceived& e);
     static void httpDataReceived_Mpd(HttpEventDataReceived& e);
-    static void httpDataReceived_MpdPeer(HttpEventDataReceived& e);
-    static void httpDataReceived_Tracker(HttpEventDataReceived& e);
+    //static void httpDataReceived_MpdPeer(HttpEventDataReceived& e);
+    //static void httpDataReceived_Tracker(HttpEventDataReceived& e);
     static void httpDataReceived_Segment(HttpEventDataReceived& e);
     static void httpDisconnect(const HttpEventDisconnect& e);
 
     static bool processAction                   (const ControlLogicAction& a);
     static bool processActionCloseTcpConnection (const ControlLogicActionCloseTcpConnection& a);
-    static bool processActionCreateTcpConnection(const ControlLogicActionCreateTcpConnection& a);
+    static bool processActionOpenTcpConnection  (const ControlLogicActionOpenTcpConnection& a);
     static bool processActionStartDownload      (const ControlLogicActionStartDownload& a);
 
     /* Playback related */
@@ -127,7 +125,8 @@ protected:
     static void closeConnection(const ConnectionId& connId);
 
 protected:
-    enum ControlState {ControlState_Initializing, ControlState_Playing, ControlState_PrepareToPause, ControlState_Paused, ControlState_Terminating, ControlState_Dead};
+    //enum ControlState {ControlState_Initializing, ControlState_Playing, ControlState_PrepareToPause, ControlState_Paused, ControlState_Terminating, ControlState_Dead};
+    enum ControlState {ControlState_Initializing, ControlState_Playing, ControlState_Terminating, ControlState_Dead};
     //typedef map<ReqId, pair<SegId, HttpMethod> > RequestMap; // TODO: consider removing
     typedef map<int, DashHttp*> HttpMap;
 
@@ -147,12 +146,6 @@ protected:
     static list<ControlLogicEvent*> events;
 
     /* General stream related stuff */
-    static dash::Usec startTime;          // [us]
-    static dash::Usec startTimeTolerance; // TODO: optimize this value ([us])
-    static bool startTimeCrossed;
-    static dash::Usec stopTime;           // [us]
-    //static int startSegment;
-    //static int stopSegment;
     static bool forcedEof;
 
     /* Playback related stuff */
@@ -161,7 +154,7 @@ protected:
     static CondVar playbackPausedCondvar;
 
     /* MPD related stuff. */
-    static dash::URL splittedMpdUrl;
+    static dashp2p::URL splittedMpdUrl;
     //static MpdWrapper* mpdWrapper;
 
     /* Adaptation related stuff */
@@ -177,19 +170,21 @@ protected:
     static SegmentStorage* storage;
 
     /* Display handover related stuff */
-    static bool withHandover;
-    static sem_t displayHandoverSema;
+    //static bool withHandover;
+    //static sem_t displayHandoverSema;
 
     /* Logging related */
-    static dash::Usec beginUnderrun;
+    static int64_t beginUnderrun;
 
     /* Overlay related */
-    static dash::Usec lastReportedBufferLevelTime;
-    static dash::Usec lastReportedBufferLevel;
-    //static dash::Usec lastReportedThroughputTime;
+    static int64_t lastReportedBufferLevelTime;
+    static int64_t lastReportedBufferLevel;
+    //static int64_t lastReportedThroughputTime;
 
     /* Related to fetching segment sizes */
     static map<ContentIdSegment, int64_t> segmentSizes;
 };
+
+}
 
 #endif /* CONTROL_H_ */

@@ -20,17 +20,18 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
  ****************************************************************************/
 
-
 #include "Contour.h"
 #include "DebugAdapter.h"
 #include <assert.h>
-
 
 #ifdef DBGMSG
 # undef DBGMSG
 # define DBGMSG(...)
 #endif
 
+using std::pair;
+
+namespace dashp2p {
 
 ContentIdSegment Contour::getStart() const
 {
@@ -112,4 +113,6 @@ string Contour::toString() const
         ret.append(tmp);
     }
     return ret;
+}
+
 }

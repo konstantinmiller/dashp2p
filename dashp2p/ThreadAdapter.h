@@ -23,8 +23,7 @@
 #ifndef THREADADAPTER_H_
 #define THREADADAPTER_H_
 
-
-#if DP2P_VLC != 0 // Use VLC threads
+//#if DP2P_VLC != 0 // Use VLC threads
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -32,14 +31,16 @@
 typedef vlc_thread_t Thread;
 typedef vlc_cond_t CondVar;
 typedef vlc_mutex_t Mutex;
-#else // Use pthreads
-#include <pthread.h>
-typedef pthread_t Thread;
-typedef pthread_cond_t CondVar;
-typedef pthread_mutex_t Mutex;
-#endif
+//#else // Use pthreads
+//#include <pthread.h>
+//typedef pthread_t Thread;
+//typedef pthread_cond_t CondVar;
+//typedef pthread_mutex_t Mutex;
+//#endif
 
-#include <inttypes.h>
+//#include <cinttypes>
+
+namespace dashp2p {
 
 class ThreadAdapter
 {
@@ -61,5 +62,7 @@ public:
     static void condVarWait(CondVar* condVar, Mutex* mutex);
     static int condVarTimedWait(CondVar* condVar, Mutex* mutex, int64_t abstime); // abstime in [us]
 };
+
+}
 
 #endif /* THREADADAPTER_H_ */

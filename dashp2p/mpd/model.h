@@ -25,7 +25,7 @@
 
 
 //#include "Dashp2pTypes.h"
-#include "ContentIdSegment.h"
+#include "ContentId.h"
 #include "Utilities.h"
 
 
@@ -52,7 +52,7 @@ public:
 #endif
 
 
-namespace dash {
+namespace dashp2p {
     namespace mpd {
         typedef std::time_t DateTime;
         typedef long Duration; /* in ms */
@@ -89,7 +89,7 @@ namespace dash {
     }
 }
 
-namespace dash {
+namespace dashp2p {
     namespace mpd {
         template<typename T> class field_access {
         public:

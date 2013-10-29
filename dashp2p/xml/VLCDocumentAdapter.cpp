@@ -21,14 +21,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
  ****************************************************************************/
 
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
 #include "xml/VLCDocumentAdapter.h"
+#include "DebugAdapter.h"
+//#include <vlc_messages.h>
+#include <string>
+using std::string;
 
-#if DP2P_VLC == 1
-# include <vlc_messages.h>
-#endif
-
-namespace dash {
+namespace dashp2p {
     namespace xml {
 
         void VLCDocumentAdapter::parse(BasicDocumentHandler& handler)
@@ -39,7 +39,7 @@ namespace dash {
 
         void VLCDocumentAdapter::readAttributes(BasicDocumentHandler& handler)
         {
-#if DP2P_VLC == 1
+#if 0
             const char* attributeName;
             const char* attributeValue;
             while((attributeName = xml_ReaderNextAttr(p_xmlReader, &attributeValue)) != NULL)
@@ -48,27 +48,25 @@ namespace dash {
                 std::string value= attributeValue;
                 handler.onAttribute(name, value);
             }
-#else
+#endif
             while( xmlTextReaderMoveToNextAttribute(p_xmlReader) == 1)
             {
             	string name((char*)xmlTextReaderConstName(p_xmlReader));
             	string value((char*)xmlTextReaderConstValue(p_xmlReader));
             	handler.onAttribute(name, value);
             }
-#endif
         }
 
         void VLCDocumentAdapter::readDocument(BasicDocumentHandler& handler)
         {
-#if DP2P_VLC == 1
+#if 0
             const char* rawStr;
             dp2p_assert(XML_READER_STARTELEM == xml_ReaderNextNode(p_xmlReader, &rawStr));
             string name = rawStr;
-#else
+#endif
             dp2p_assert(1 == xmlTextReaderRead(p_xmlReader));
             dp2p_assert(XML_READER_TYPE_ELEMENT == xmlTextReaderNodeType(p_xmlReader));
             string name((char*)xmlTextReaderConstName(p_xmlReader));
-#endif
 
             handler.onDocumentStart();
             processElement(handler, name);
@@ -79,17 +77,16 @@ namespace dash {
         {
             handler.onElementStart(name);
 
-#if DP2P_VLC == 1
+#if 0
             bool isEmpty = xml_ReaderIsEmptyElement(p_xmlReader);
-#else
-            bool isEmpty = xmlTextReaderIsEmptyElement(p_xmlReader);
 #endif
+            bool isEmpty = xmlTextReaderIsEmptyElement(p_xmlReader);
 
             readAttributes(handler);
 
             while(!isEmpty)
             {
-#if DP2P_VLC == 1
+#if 0
             	const char *rawStr;
                 int elementType= xml_ReaderNextNode(p_xmlReader, &rawStr);
                 if(elementType != -1 && elementType != XML_READER_NONE && elementType != XML_READER_ENDELEM)
@@ -104,7 +101,7 @@ namespace dash {
                 } else {
                 	break;
                 }
-#else
+#endif
                 int ret = xmlTextReaderRead(p_xmlReader);
                 dp2p_assert(ret != -1);
                 if(ret == 0)
@@ -122,7 +119,6 @@ namespace dash {
                 } else {
                 	continue;
                 }
-#endif
             }
 
             handler.onElementEnd(name);
@@ -131,14 +127,13 @@ namespace dash {
         void VLCDocumentAdapter::setupReader()
         {
 
-#if DP2P_VLC == 1
+#if 0
         	p_xml= xml_Create(p_stream);
         	dp2p_assert(p_xml);
 
             p_xmlReader = xml_ReaderCreate(p_xml, p_stream);
-#else
-            p_xmlReader = xmlReaderForMemory(buffer, size, NULL, NULL, 0);
 #endif
+            p_xmlReader = xmlReaderForMemory(buffer, size, NULL, NULL, 0);
 
             dp2p_assert(p_xmlReader);
         }

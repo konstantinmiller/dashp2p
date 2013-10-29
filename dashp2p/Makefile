@@ -4,8 +4,8 @@ CC = cc
 #VLC_PLUGIN_CFLAGS := $(shell pkg-config --cflags ../vlc/src/vlc-plugin.pc)
 #VLC_PLUGIN_LIBS := $(shell pkg-config --libs ../vlc/src/vlc-plugin.pc)
 
-override CFLAGS += -fPIC -DPIC -ggdb -O1 -Wall -Wextra -Werror -Wsign-compare -Wundef -Wpointer-arith -Wvolatile-register-var -Wfatal-errors -DDP2P_VLC=1
-override CFLAGS += -DMODULE_STRING=\"dashp2p\" -D__PLUGIN__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE
+override CFLAGS += -std=c++11 -fPIC -DPIC -ggdb -O1 -Wall -Wextra -Werror -Wsign-compare -Wundef -Wpointer-arith -Wvolatile-register-var -Wfatal-errors #-DDP2P_VLC=1
+override CFLAGS += -DMODULE_STRING=\"dashp2p\" -D__PLUGIN__ -D__STDC_FORMAT_MACROS -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE
 
 override LDFLAGS += -Wl,-no-undefined,-z,defs
 override LDFLAGS += -Wl,-rpath,../vlc/src/.libs -L../vlc/src/.libs -L/usr/lib ../vlc/src/.libs/libvlccore.so -lpthread -lstdc++ -lm -lc -lgcc_s -lrt -lxml2

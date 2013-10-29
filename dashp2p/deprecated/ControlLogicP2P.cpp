@@ -28,19 +28,17 @@
 #endif
 
 #include "Dashp2pTypes.h"
-#include "ContentIdMpd.h"
-#include "ContentIdSegment.h"
-#include "ContentIdMpdPeer.h"
-#include "ContentIdTracker.h"
+#include "ContentId.h"
 #include "ControlLogicP2P.h"
-#include "ControlLogicActionCloseTcpConnection.h"
-#include "ControlLogicActionCreateTcpConnection.h"
-#include "ControlLogicActionStartDownload.h"
+#include "ControlLogicAction.h"
 #include "Statistics.h"
 #include "OverlayAdapter.h"
 #include "DebugAdapter.h"
 #include "xml/basic_xml.h"
 #include "XMLParserP2P.h"
+#include "HttpRequestManager.h"
+using namespace dp2p;
+
 #include <stdio.h>
 #include <assert.h>
 #include <utility>
@@ -271,18 +269,18 @@ list<ControlLogicAction*> ControlLogicP2P::processEventDataReceivedMpd(ControlLo
 
 	if(mpdDataField == NULL) {
 		dp2p_assert(e.byteFrom == 0);
-		mpdDataField = new DataField(e.getContentLength());
+		mpdDataField = new DataField(HttpRequestManager::getContentLength(e.reqId));
 		dp2p_assert(mpdDataField);
 	}
 
 	dp2p_assert(!mpdDataField->full());
 
-	mpdDataField->setData(e.byteFrom, e.byteTo, e.getPldBytes() + e.byteFrom, false);
+	mpdDataField->setData(e.byteFrom, e.byteTo, HttpRequestManager::getPldBytes(e.reqId) + e.byteFrom, false);
 
 	if(mpdDataField->full()) {
 		processEventDataReceivedMpd_Completed();
-		ackActionRequestCompleted(e.getContentId());
-		Statistics::recordRequestStatistics(e.getConnId(), e.takeRequest());
+		Statistics::recordRequestStatistics(e.connId, e.reqId);
+		ackActionRequestCompleted(HttpRequestManager::getContentId(e.reqId));
 	} else {
 		return actions;
 	}
@@ -341,13 +339,13 @@ list<ControlLogicAction*> ControlLogicP2P::processEventDataReceivedMpdPeer(Contr
 
 	list<ControlLogicAction*> actions;
 
-	if(e.byteTo == e.getContentLength() - 1) {
-		ackActionRequestCompleted(e.getContentId());
+	if(e.byteTo == HttpRequestManager::getContentLength(e.reqId) - 1) {
+		ackActionRequestCompleted(HttpRequestManager::getContentId(e.reqId));
 		DBGMSG("Received a complete MpdPeer");
 		// TODO: you downloaded a peer MPD. now decide what to do next.
 
 		//Parse the received MPDPeer
-		XMLParserP2P::parseMPDPeer(e.getPldBytes(), e.getContentLength() - 1, peers);
+		XMLParserP2P::parseMPDPeer(HttpRequestManager::getPldBytes(e.reqId), HttpRequestManager::getContentLength(e.reqId) - 1, peers);
 
 		if(peerCounter < peers.size() && mode == Downloading_PeerMPD)
 		{
@@ -445,7 +443,7 @@ list<ControlLogicAction*> ControlLogicP2P::processEventDataReceivedMpdPeer(Contr
 			waitForMPDPeerUpdate = false;
 		}
 
-		Statistics::recordRequestStatistics(e.getConnId(), e.takeRequest());
+		Statistics::recordRequestStatistics(e.connId, e.reqId);
 	}
 	else
 	{
@@ -464,18 +462,18 @@ list<ControlLogicAction*> ControlLogicP2P::processEventDataReceivedSegment(Contr
 	/* Return object */
 	list<ControlLogicAction*> actions;
 
-	const ContentIdSegment& segId = dynamic_cast<const ContentIdSegment&>(e.getContentId());
+	const ContentIdSegment& segId = dynamic_cast<const ContentIdSegment&>(HttpRequestManager::getContentId(e.reqId));
 
 	/* We do not start a new download if (i) the last one is not finished yet, or (ii) we have already downloading the stop segment,
 	 * or (iii) we downloaded the initial segment (since we have already requested initial segment and start segment pipelined) */
-	if(e.byteTo != e.getContentLength() - 1) {
+	if(e.byteTo != HttpRequestManager::getContentLength(e.reqId) - 1) {
 		DBGMSG("Segment not ready yet. No action required.");
 		return actions;
 	}
 
 	DBGMSG("Segment completed. Processing.");
 
-	dp2p_assert(ackActionRequestCompleted(e.getContentId()));
+	dp2p_assert(ackActionRequestCompleted(HttpRequestManager::getContentId(e.reqId)));
 	/*else if (segId.segNr() == 0) {
 		DBGMSG("Init segment. No action required.");
 		return actions;
@@ -529,10 +527,9 @@ list<ControlLogicAction*> ControlLogicP2P::processEventDataReceivedSegment(Contr
 	/*Select next Segment*/
 	nextSegId = segId.segmentIndex() + 1;
 	/*Calculate the actual Fetchtime*/
-	actualFetchTime = e.peekRequest().tsLastByte - e.peekRequest().tsSent;
+	actualFetchTime = HttpRequestManager::getTsLastByte(e.reqId) - HttpRequestManager::getTsSent(e.reqId);
 	DBGMSG("The actual fetchtime is : %lf", actualFetchTime);
-	/* Give the HttpRequest object to the Statistics module. It will delete it later. */
-	Statistics::recordRequestStatistics(e.getConnId(), e.takeRequest());
+	Statistics::recordRequestStatistics(e.connId, e.reqId);
 	segmentDuraton = ((double) mpdWrapper->getSegmentDuration(segId)) * pow(10.0,-6);
 	DBGMSG("The actual segments duration is : %lf ", segmentDuraton);
 	lastSegmentsBitrate = segId.bitRate();
@@ -551,13 +548,13 @@ list<ControlLogicAction*> ControlLogicP2P::processEventDataReceivedTracker(Contr
 
 	list<ControlLogicAction*> actions;
 
-	if(e.byteTo == e.getContentLength() - 1) {
-		ackActionRequestCompleted(e.getContentId());
+	if(e.byteTo == HttpRequestManager::getContentLength(e.reqId) - 1) {
+		ackActionRequestCompleted(HttpRequestManager::getContentId(e.reqId));
 		// TODO: you downloaded a tracker. now decide what to do next.
 
 		DBGMSG("Tracker is Downloaded");
 		//Parse the Tracker
-		XMLParserP2P::parseTracker(e.getPldBytes(), e.getContentLength() - 1, peers, myId);
+		XMLParserP2P::parseTracker(HttpRequestManager::getPldBytes(e.reqId), HttpRequestManager::getContentLength(e.reqId) - 1, peers, myId);
 		//If no peers have been received switch to No_P2P mode
 		if(peers.size() == 0)
 		{
@@ -594,7 +591,7 @@ list<ControlLogicAction*> ControlLogicP2P::processEventDataReceivedTracker(Contr
 				actions.push_back(new ControlLogicActionStartDownload(connId, contentIds, urls, httpMethods));
 			}
 		}
-		Statistics::recordRequestStatistics(e.getConnId(), e.takeRequest());
+		Statistics::recordRequestStatistics(e.connId, e.reqId);
 	}
 	else
 	{
@@ -646,9 +643,9 @@ list<ControlLogicAction*> ControlLogicP2P::processEventDisconnect(const ControlL
 	}
 
 	list<const ContentId*> contentIds;
-	for(list<HttpRequest*>::const_iterator it = e.reqs.begin(); it != e.reqs.end(); ++it)
+	for(list<int>::const_iterator it = e.reqs.begin(); it != e.reqs.end(); ++it)
 	{
-		contentIds.push_back((*it)->getContentId().copy());
+		contentIds.push_back(HttpRequestManager::getContentId(*it).copy());
 	}
 	/*
 	if(!contentIds.empty()) {

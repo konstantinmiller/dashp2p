@@ -28,7 +28,7 @@
 
 #include <iostream>
 
-namespace dash {
+namespace dashp2p {
     namespace mpd {
         ModelReader::ModelReader(const ModelFactory& factory):
             _handler(*(new ModelHandler(factory)))
@@ -38,7 +38,7 @@ namespace dash {
             delete &_handler;
         }
 
-        MediaPresentationDescription *ModelReader::read(dash::xml::BasicDocument& xmlDocument) {
+        MediaPresentationDescription *ModelReader::read(dashp2p::xml::BasicDocument& xmlDocument) {
             xmlDocument.parse(_handler);
             MediaPresentationDescription* result= _handler.mpd;
             _handler.mpd= NULL;

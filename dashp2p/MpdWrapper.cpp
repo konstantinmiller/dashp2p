@@ -27,8 +27,10 @@
 #include "MpdWrapper.h"
 #include "XmlAdapter.h"
 #include "DebugAdapter.h"
-#include <inttypes.h>
+//#include <cinttypes>
 #include <limits>
+
+namespace dashp2p {
 
 MpdWrapper::MpdWrapper(char* p, int size)
   : mpd(XmlAdapter::parseMpd(p,size))
@@ -59,7 +61,7 @@ int MpdWrapper::getNumRepresentations(const AdaptationSetId& adaptationSetId) co
 
 int MpdWrapper::getNumRepresentations(int periodIndex, int adaptationSetIndex) const
 {
-	const dash::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
+	const dashp2p::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
 	return adaptationSet.representations.get().size();
 }
 
@@ -72,12 +74,12 @@ int MpdWrapper::getNumRepresentations(int periodIndex, int adaptationSetIndex, i
 
 	dp2p_assert(width > 0 && height > 0);
 
-	const dash::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
+	const dashp2p::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
 
 	int ret = 0;
 	for(size_t i = 0; i < adaptationSet.representations.get().size(); ++i)
 	{
-		const dash::mpd::Representation& rep = *(adaptationSet.representations.get().at(i));
+		const dashp2p::mpd::Representation& rep = *(adaptationSet.representations.get().at(i));
 		if(rep.width.isSet() || rep.height.isSet()) {
 			if((int)rep.width.get() == width && (int)rep.height.get() == height) {
 				++ret;
@@ -131,11 +133,11 @@ RepresentationId MpdWrapper::getRepresentationIdByBitrate(const AdaptationSetId&
 
 int MpdWrapper::getNumSegments(int periodIndex, int adaptationSetIndex, int representationIndex) const
 {
-	const dash::mpd::Representation& rep = getRepresentation(periodIndex, adaptationSetIndex, representationIndex);
+	const dashp2p::mpd::Representation& rep = getRepresentation(periodIndex, adaptationSetIndex, representationIndex);
 	return getNumSegments(rep);
 }
 
-int MpdWrapper::getNumSegments(const dash::mpd::Representation& rep) const
+int MpdWrapper::getNumSegments(const dashp2p::mpd::Representation& rep) const
 {
 	return 1 + rep.segmentList.get().segmentURLs.get().size();
 }
@@ -155,36 +157,36 @@ vector<SegmentId> MpdWrapper::getSegments(const RepresentationId& representation
 	return ret;
 }
 
-dash::Usec MpdWrapper::getVideoDuration() const
+int64_t MpdWrapper::getVideoDuration() const
 {
-	return (dash::Usec)1000 * (dash::Usec)mpd->mediaPresentationDuration.get();
+	return (int64_t)1000 * (int64_t)mpd->mediaPresentationDuration.get();
 }
 
-Usec MpdWrapper::getSegmentDuration(const ContentIdSegment& segId) const
+int64_t MpdWrapper::getSegmentDuration(const ContentIdSegment& segId) const
 {
-    const dash::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
+    const dashp2p::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
     return getSegmentDuration(rep, segId.segmentIndex());
 }
 
-Usec MpdWrapper::getSegmentDuration(const dash::mpd::Representation& rep, int segmentIndex) const
+int64_t MpdWrapper::getSegmentDuration(const dashp2p::mpd::Representation& rep, int segmentIndex) const
 {
     if(segmentIndex == 0) {
         return 0;
     } else if(segmentIndex == getNumSegments(rep) - 1) {
-        const Usec lastSegDuration = std::max<Usec>(1, getVideoDuration() - (getNumSegments(rep) - 2) * getNominalSegmentDuration(rep));
+        const int64_t lastSegDuration = std::max<int64_t>(1, getVideoDuration() - (getNumSegments(rep) - 2) * getNominalSegmentDuration(rep));
         return lastSegDuration;
     } else {
         return getNominalSegmentDuration(rep);
     }
 }
 
-Usec MpdWrapper::getSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex, int segmentIndex) const
+int64_t MpdWrapper::getSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex, int segmentIndex) const
 {
-    const dash::mpd::Representation& rep = getRepresentation(periodIndex, adaptationSetIndex, representationIndex);
+    const dashp2p::mpd::Representation& rep = getRepresentation(periodIndex, adaptationSetIndex, representationIndex);
     return getSegmentDuration(rep, segmentIndex);
 }
 
-Usec MpdWrapper::getPosition(const ContentIdSegment& segId, int64_t byte, int64_t segmentSize) const
+int64_t MpdWrapper::getPosition(const ContentIdSegment& segId, int64_t byte, int64_t segmentSize) const
 {
 	dp2p_assert(segId.valid());
 
@@ -192,29 +194,29 @@ Usec MpdWrapper::getPosition(const ContentIdSegment& segId, int64_t byte, int64_
     if(segId.segmentIndex() == 0)
         return 0;
 
-    const dash::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
+    const dashp2p::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
 
-    const Usec nominalDuration = getNominalSegmentDuration(rep);
-    const Usec durationCurrentSegment = getSegmentDuration(rep, segId.segmentIndex());
+    const int64_t nominalDuration = getNominalSegmentDuration(rep);
+    const int64_t durationCurrentSegment = getSegmentDuration(rep, segId.segmentIndex());
     return (segId.segmentIndex() - 1) * nominalDuration + (byte * durationCurrentSegment) / segmentSize;
 }
 
-Usec MpdWrapper::getStartTime(const ContentIdSegment& segId) const
+int64_t MpdWrapper::getStartTime(const ContentIdSegment& segId) const
 {
     if(segId.segmentIndex() == 0) {
         return 0;
     } else {
     	/* Get the representation. */
-    	const dash::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
+    	const dashp2p::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
 
         return (segId.segmentIndex() - 1) * getNominalSegmentDuration(rep);
     }
 }
 
-Usec MpdWrapper::getEndTime(const ContentIdSegment& segId) const
+int64_t MpdWrapper::getEndTime(const ContentIdSegment& segId) const
 {
 	/* Get the representation. */
-	const dash::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
+	const dashp2p::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
 
     if(segId.segmentIndex() < getNumSegments(rep) - 1) {
         return segId.segmentIndex() * getNominalSegmentDuration(rep);
@@ -223,18 +225,18 @@ Usec MpdWrapper::getEndTime(const ContentIdSegment& segId) const
     }
 }
 
-Usec MpdWrapper::getNominalSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex) const
+int64_t MpdWrapper::getNominalSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex) const
 {
-	const dash::mpd::Representation& rep = getRepresentation(periodIndex, adaptationSetIndex, representationIndex);
+	const dashp2p::mpd::Representation& rep = getRepresentation(periodIndex, adaptationSetIndex, representationIndex);
 	return getNominalSegmentDuration(rep);
 }
 
-Usec MpdWrapper::getNominalSegmentDuration(const dash::mpd::Representation& rep) const
+int64_t MpdWrapper::getNominalSegmentDuration(const dashp2p::mpd::Representation& rep) const
 {
 	const unsigned timescale = rep.segmentList.get().timescale.isSet() ? rep.segmentList.get().timescale.get() : 1;
 	const unsigned duration = rep.segmentList.get().duration.get();
 	dp2p_assert(duration % timescale == 0);
-	return ((dash::Usec)1000000 * (dash::Usec)duration) / (dash::Usec)timescale;
+	return ((int64_t)1000000 * (int64_t)duration) / (int64_t)timescale;
 }
 
 vector<pair<int, int> > MpdWrapper::getSpatialResolutions(int periodIndex, int adaptationSetIndex) const
@@ -243,10 +245,10 @@ vector<pair<int, int> > MpdWrapper::getSpatialResolutions(int periodIndex, int a
 	vector<pair<int, int> > resolutions;
 
 	/* fill the return object */
-	const dash::mpd::AdaptationSet& adaSet = getAdaptationSet(periodIndex, adaptationSetIndex);
+	const dashp2p::mpd::AdaptationSet& adaSet = getAdaptationSet(periodIndex, adaptationSetIndex);
 	for(size_t i = 0; i < adaSet.representations.get().size(); ++i)
 	{
-		const dash::mpd::Representation& rep = *(adaSet.representations.get().at(i));
+		const dashp2p::mpd::Representation& rep = *(adaSet.representations.get().at(i));
 		const int width = rep.width.isSet() ? rep.width.get() : adaSet.width.get();
 		const int height = rep.height.isSet() ? rep.height.get() : adaSet.height.get();
 		if(resolutions.empty()) {
@@ -281,11 +283,11 @@ pair<int,int> MpdWrapper::getLowestSpatialResolution(int periodIndex, int adapta
 {
 	pair<int,int> ret(std::numeric_limits<int>::max(), std::numeric_limits<int>::max());
 
-	const dash::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
+	const dashp2p::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
 
 	for(size_t i = 0; i < adaptationSet.representations.get().size(); ++i)
 	{
-		const dash::mpd::Representation& rep = *(adaptationSet.representations.get().at(i));
+		const dashp2p::mpd::Representation& rep = *(adaptationSet.representations.get().at(i));
 		if(rep.width.isSet() && rep.height.isSet()) {
 			if((int)rep.width.get() * (int)rep.height.get() < ret.first * ret.second)
 				ret = std::pair<int, int>(rep.width.get(), rep.height.get());
@@ -301,11 +303,11 @@ pair<int,int> MpdWrapper::getHighestSpatialResolution(int periodIndex, int adapt
 {
 	pair<int,int> ret(std::numeric_limits<int>::min(), std::numeric_limits<int>::min());
 
-	const dash::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
+	const dashp2p::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
 
 	for(size_t i = 0; i < adaptationSet.representations.get().size(); ++i)
 	{
-		const dash::mpd::Representation& rep = *(adaptationSet.representations.get().at(i));
+		const dashp2p::mpd::Representation& rep = *(adaptationSet.representations.get().at(i));
 		if(rep.width.isSet() && rep.height.isSet()) {
 			if((int)rep.width.get() * (int)rep.height.get() > ret.first * ret.second)
 				ret = std::pair<int, int>(rep.width.get(), rep.height.get());
@@ -351,11 +353,11 @@ vector<int> MpdWrapper::getBitrates(int periodIndex, int adaptationSetIndex, int
 
 	vector<int> ret;
 
-	const dash::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
+	const dashp2p::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
 
 	for(size_t i = 0; i < adaptationSet.representations.get().size(); ++i)
 	{
-		const dash::mpd::Representation& rep = *(adaptationSet.representations.get().at(i));
+		const dashp2p::mpd::Representation& rep = *(adaptationSet.representations.get().at(i));
 		bool tmp = false;
 		if(width == 0 && height == 0) {
 			tmp = true;
@@ -393,7 +395,7 @@ vector<int> MpdWrapper::getBitrates(int periodIndex, int adaptationSetIndex, int
 string MpdWrapper::getSegmentURL(const ContentIdSegment& segId) const
 {
 	/* Get the representation. */
-	const dash::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
+	const dashp2p::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
 
 	/* Initialize the return value with the base URL. */
 	string URL(mpd->baseURLs.get().at(0)->value.get());
@@ -408,7 +410,7 @@ string MpdWrapper::getSegmentURL(const ContentIdSegment& segId) const
 	return URL;
 }
 
-dash::URL MpdWrapper::getSegmentUrl(const SegmentId& segmentId) const
+dashp2p::URL MpdWrapper::getSegmentUrl(const SegmentId& segmentId) const
 {
 	/* Get the segment URL. */
 	if(segmentId.isInitSegment()) {
@@ -417,13 +419,13 @@ dash::URL MpdWrapper::getSegmentUrl(const SegmentId& segmentId) const
 		/* Get the base URL */
 		string _url(mpd->baseURLs.get().at(0)->value.get());
 		/* Get the representation */
-		const dash::mpd::Representation& rep = getRepresentation(segmentId);
+		const dashp2p::mpd::Representation& rep = getRepresentation(segmentId);
 		_url.append(rep.segmentList.get().segmentURLs.get().at(segmentId.segmentIndex - 1)->media.get());
-		return dash::Utilities::splitURL(_url);
+		return dashp2p::Utilities::splitURL(_url);
 	}
 }
 
-string MpdWrapper::getInitSegmentURL(const dash::mpd::Representation& rep) const
+string MpdWrapper::getInitSegmentURL(const dashp2p::mpd::Representation& rep) const
 {
 	if(rep.segmentList.isSet() && rep.segmentList.get().initialization.isSet())
 		return rep.segmentList.get().initialization.get().sourceURL.get();
@@ -431,32 +433,32 @@ string MpdWrapper::getInitSegmentURL(const dash::mpd::Representation& rep) const
 		return rep.segmentBase.get().initialization.get().sourceURL.get();
 }
 
-dash::URL MpdWrapper::getInitSegmentUrl(const RepresentationId& representationId) const
+dashp2p::URL MpdWrapper::getInitSegmentUrl(const RepresentationId& representationId) const
 {
 	/* Get the base URL */
 	string _url(mpd->baseURLs.get().at(0)->value.get());
 
-	const dash::mpd::Representation& rep = getRepresentation(representationId);
+	const dashp2p::mpd::Representation& rep = getRepresentation(representationId);
 
 	if(rep.segmentList.isSet() && rep.segmentList.get().initialization.isSet())
 		_url.append(rep.segmentList.get().initialization.get().sourceURL.get());
 	else
 		_url.append(rep.segmentBase.get().initialization.get().sourceURL.get());
 
-	return dash::Utilities::splitURL(_url);
+	return dashp2p::Utilities::splitURL(_url);
 }
 
 ContentIdSegment MpdWrapper::getNextSegment(const ContentIdSegment& segId) const
 {
-	const dash::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
+	const dashp2p::mpd::Representation& rep = getRepresentationByBitrate(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate());
 	dp2p_assert(segId.valid() && segId.segmentIndex() < getNumSegments(rep) - 1);
 	return ContentIdSegment(segId.periodIndex(), segId.adaptationSetIndex(), segId.bitRate(), segId.segmentIndex() + 1);
 }
 
 pair<int, int> MpdWrapper::getSpatialResolution(const RepresentationId& representationId) const
 {
-	const dash::mpd::AdaptationSet& adaptationSet = getAdaptationSet(representationId);
-	const dash::mpd::Representation& rep = getRepresentation(representationId);
+	const dashp2p::mpd::AdaptationSet& adaptationSet = getAdaptationSet(representationId);
+	const dashp2p::mpd::Representation& rep = getRepresentation(representationId);
 	if(rep.width.isSet()) {
 		dp2p_assert(rep.height.isSet());
 		return pair<int, int>(rep.width.get(), rep.height.get());
@@ -468,7 +470,7 @@ pair<int, int> MpdWrapper::getSpatialResolution(const RepresentationId& represen
 
 int MpdWrapper::getBitrate(const RepresentationId& representationId) const
 {
-	const dash::mpd::Representation& rep = getRepresentation(representationId);
+	const dashp2p::mpd::Representation& rep = getRepresentation(representationId);
 	return rep.bandwidth.get();
 }
 
@@ -487,44 +489,44 @@ void MpdWrapper::outputVideoStatistics(const string& /*fileName*/) const
 	// TBD
 }
 
-const dash::mpd::Period& MpdWrapper::getPeriod(int periodIndex) const
+const dashp2p::mpd::Period& MpdWrapper::getPeriod(int periodIndex) const
 {
-	const dash::mpd::Period& period = *(mpd->periods.get().at(periodIndex));
+	const dashp2p::mpd::Period& period = *(mpd->periods.get().at(periodIndex));
 	return period;
 }
 
-const dash::mpd::Period& MpdWrapper::getPeriod(const PeriodId& periodId) const
+const dashp2p::mpd::Period& MpdWrapper::getPeriod(const PeriodId& periodId) const
 {
 	return getPeriod(periodId.periodIndex);
 }
 
-const dash::mpd::AdaptationSet& MpdWrapper::getAdaptationSet(int periodIndex, int adaptationSetIndex) const
+const dashp2p::mpd::AdaptationSet& MpdWrapper::getAdaptationSet(int periodIndex, int adaptationSetIndex) const
 {
-	const dash::mpd::Period& period = getPeriod(periodIndex);
-	const dash::mpd::AdaptationSet& adaptationSet = *(period.adaptationSets.get().at(adaptationSetIndex));
+	const dashp2p::mpd::Period& period = getPeriod(periodIndex);
+	const dashp2p::mpd::AdaptationSet& adaptationSet = *(period.adaptationSets.get().at(adaptationSetIndex));
 	return adaptationSet;
 }
 
-const dash::mpd::AdaptationSet& MpdWrapper::getAdaptationSet(const AdaptationSetId& adaptationSetId) const
+const dashp2p::mpd::AdaptationSet& MpdWrapper::getAdaptationSet(const AdaptationSetId& adaptationSetId) const
 {
 	return getAdaptationSet(adaptationSetId.periodIndex, adaptationSetId.adaptationSetIndex);
 }
 
-const dash::mpd::Representation& MpdWrapper::getRepresentation(const RepresentationId& representationId) const
+const dashp2p::mpd::Representation& MpdWrapper::getRepresentation(const RepresentationId& representationId) const
 {
 	return getRepresentation(representationId.periodIndex, representationId.adaptationSetIndex, representationId.representationIndex);
 }
 
-const dash::mpd::Representation& MpdWrapper::getRepresentation(int periodIndex, int adaptationSetIndex, int representationIndex) const
+const dashp2p::mpd::Representation& MpdWrapper::getRepresentation(int periodIndex, int adaptationSetIndex, int representationIndex) const
 {
-	const dash::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
-	const dash::mpd::Representation& representation = *(adaptationSet.representations.get().at(representationIndex));
+	const dashp2p::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
+	const dashp2p::mpd::Representation& representation = *(adaptationSet.representations.get().at(representationIndex));
 	return representation;
 }
 
-const dash::mpd::Representation& MpdWrapper::getRepresentationByBitrate(int periodIndex, int adaptationSetIndex, int bitRate) const
+const dashp2p::mpd::Representation& MpdWrapper::getRepresentationByBitrate(int periodIndex, int adaptationSetIndex, int bitRate) const
 {
-	const dash::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
+	const dashp2p::mpd::AdaptationSet& adaptationSet = getAdaptationSet(periodIndex, adaptationSetIndex);
 
 	for(size_t i = 0; i < adaptationSet.representations.get().size(); ++i)
 	{
@@ -575,4 +577,6 @@ bool SegmentId::operator<(const SegmentId& other) const
 		return false;
 	else
 		return (segmentIndex < other.segmentIndex);
+}
+
 }

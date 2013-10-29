@@ -23,29 +23,38 @@
 #ifndef DEBUGADAPTER_H_
 #define DEBUGADAPTER_H_
 
-#include <stdio.h>
-#include "ThreadAdapter.h"
-
-#if DP2P_VLC != 0
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
-# include <vlc_common.h>
-#endif
 
-#define ERRMSG(...)  do { DebugAdapter::errPrintf (__VA_ARGS__); } while(false)
-#define ERRMSGWT(...)  do { DebugAdapter::errPrintfWt (__VA_ARGS__); } while(false)
-#define ERRMSGWL(...)  do { DebugAdapter::errPrintfWl (__FILE__, __func__, __LINE__, __VA_ARGS__); } while(false)
+#include <cstdio>
+#include "ThreadAdapter.h"
 
-#define WARNMSG(...) do { DebugAdapter::warnPrintf(__VA_ARGS__); } while(false)
-#define WARNMSGWT(...) do { DebugAdapter::warnPrintfWt(__VA_ARGS__); } while(false)
-#define WARNMSGWL(...) do { DebugAdapter::warnPrintfWl(__FILE__, __func__, __LINE__, __VA_ARGS__); } while(false)
+#define dp2p_assert(x) do{if(!(x)) {dashp2p::DebugAdapter::errPrintfWl (__FILE__, __func__, __LINE__, "assert(%s) failed", #x); abort();}}while(0)
+#define dp2p_assert_v(x, msg, ...)                                                                  \
+	do{if(!(x)) {                                                                                      \
+		dashp2p::DebugAdapter::errPrintfWl (__FILE__, __func__, __LINE__, "assert(%s) failed", #x); \
+		dashp2p::DebugAdapter::errPrintfWl (__FILE__, __func__, __LINE__, msg, __VA_ARGS__);        \
+		abort();                                                                                    \
+	}}while(0)
 
-#define INFOMSG(...) do { DebugAdapter::infoPrintf(__VA_ARGS__); } while(false)
-#define INFOMSGWT(...) do { DebugAdapter::infoPrintfWt(__VA_ARGS__); } while(false)
-#define INFOMSGWL(...) do { DebugAdapter::infoPrintfWl(__FILE__, __func__, __LINE__, __VA_ARGS__); } while(false)
+#define THROW_RUNTIME(...) do{dashp2p::DebugAdapter::throwRuntime (__FILE__, __func__, __LINE__, __VA_ARGS__);}while(0)
 
-#define DBGMSG(...)  do { DebugAdapter::dbgPrintf (__FILE__, __func__, __LINE__, __VA_ARGS__); } while(false)
+#define ERRMSG(...) do{dashp2p::DebugAdapter::errPrintf (__VA_ARGS__);}while(0)
+#define ERRMSGWT(...) do{dashp2p::DebugAdapter::errPrintfWt (__VA_ARGS__);}while(0)
+#define ERRMSGWL(...) do{dashp2p::DebugAdapter::errPrintfWl (__FILE__, __func__, __LINE__, __VA_ARGS__);}while(0)
+
+#define WARNMSG(...) do{dashp2p::DebugAdapter::warnPrintf(__VA_ARGS__);}while(0)
+#define WARNMSGWT(...) do{dashp2p::DebugAdapter::warnPrintfWt(__VA_ARGS__);}while(0)
+#define WARNMSGWL(...) do{dashp2p::DebugAdapter::warnPrintfWl(__FILE__, __func__, __LINE__, __VA_ARGS__);}while(0)
+
+#define INFOMSG(...) do{dashp2p::DebugAdapter::infoPrintf(__VA_ARGS__);}while(0)
+#define INFOMSGWT(...) do{dashp2p::DebugAdapter::infoPrintfWt(__VA_ARGS__);}while(0)
+#define INFOMSGWL(...) do{dashp2p::DebugAdapter::infoPrintfWl(__FILE__, __func__, __LINE__, __VA_ARGS__);}while(0)
+
+#define DBGMSG(...) do{dashp2p::DebugAdapter::dbgPrintf (__FILE__, __func__, __LINE__, __VA_ARGS__);}while(0)
+
+namespace dashp2p {
 
 enum DebuggingLevel {
 	DebuggingLevel_Quiet = 10,
@@ -63,13 +72,11 @@ private:
 
 /* Public methods */
 public:
-#if DP2P_VLC != 0
     static void init(DebuggingLevel debuggingLevel, vlc_object_t* dashp2pPluginObject, const char* dbgFileName = NULL);
-#else
-    static void init(DebuggingLevel debuggingLevel, const char* dbgFileName = NULL);
-#endif
+    //static void init(DebuggingLevel debuggingLevel, const char* dbgFileName = NULL);
     static void cleanUp();
     static void setDebugFile(const char* dbgFileName);
+    static void throwRuntime(const char* fileName, const char* functionName, int lineNr, ...);
     static void errPrintf(const char* msg, ...);
     static void errPrintfWt(const char* msg, ...);
     static void errPrintfWl(const char* fileName, const char* functionName, int lineNr, ...);
@@ -93,9 +100,9 @@ private:
     static char* buf;
     static FILE* f;
     static DebuggingLevel debuggingLevel;
-#if DP2P_VLC != 0
     static vlc_object_t* dashp2pPluginObject;
-#endif
 };
+
+}
 
 #endif /* DEBUGADAPTER_H_ */

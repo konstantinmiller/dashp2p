@@ -25,7 +25,7 @@
 
 #include <string>
 
-namespace dash {
+namespace dashp2p {
     namespace xml {
         class BasicDocumentHandler {
         public:

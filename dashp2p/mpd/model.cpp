@@ -29,7 +29,7 @@
 #include <limits>
 #include <sstream>
 
-namespace dash {
+namespace dashp2p {
     namespace mpd {
         BaseURL::BaseURL():
             value(),

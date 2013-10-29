@@ -1,9 +1,9 @@
 /****************************************************************************
- * XmlAdapter.h                                                             *
+ * Dashp2p.h                                                                *
  ****************************************************************************
  * Copyright (C) 2012 Technische Universitaet Berlin                        *
  *                                                                          *
- * Created on: Sep 24, 2012                                                 *
+ * Created on: Jan 31, 2013                                                 *
  * Authors: Konstantin Miller <konstantin.miller@tu-berlin.de>              *
  *                                                                          *
  * This program is free software: you can redistribute it and/or modify     *
@@ -20,34 +20,40 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
  ****************************************************************************/
 
-#ifndef XMLADAPTER_H_
-#define XMLADAPTER_H_
+#ifndef DASHP2P_H_
+#define DASHP2P_H_
 
-#include "mpd/model.h"
-#include <vlc_common.h>
+#if !defined DP2P_VLC || DP2P_VLC == 0
 
-namespace dashp2p {
+#include <string>
 
-class XmlAdapter
+#include "Utilities.h"
+#include "Statistics.h"
+
+namespace dp2p {
+
+class Dashp2p
 {
 public:
-    //static void init(vlc_object_t* dashp2pPluginObject) {dp2p_assert(dashp2pPluginObject && !XmlAdapter::dashp2pPluginObject); XmlAdapter::dashp2pPluginObject = dashp2pPluginObject;}
-    //static void cleanup() {dashp2pPluginObject = NULL;}
+	Dashp2p();
+	virtual ~Dashp2p();
 
-    /**
-     * Parses the MPD.
-     * @param buffer Will be deleted within this function.
-     */
-    static mpd::MediaPresentationDescription* parseMpd(char* buffer, int bufferSize);
+	static void initDebugging(DebuggingLevel dl, const char* logFileName);
+	static void initXml();
+	static void initStatistics(const std::string& logDir, const bool logTcpState, const bool logScalarValues, const bool logAdaptationDecision,
+			const bool logGiveDataToVlc, const bool logBytesStored, const bool logSecStored, const bool logUnderruns,
+			const bool logReconnects, const bool logSegmentSizes, const bool logRequestStatistics,
+			const bool logRequestDownloadProgress);
+	static void setReferenceTime();
 
-private:
-    XmlAdapter(){}
-    virtual ~XmlAdapter(){}
+	static void cleanup();
+	static void cleanupDebugging();
 
-private:
-    //static vlc_object_t* dashp2pPluginObject;
+	static void setDebugFile(const char* dbgFileName);
 };
 
-}
+} /* namespace dp2p */
 
-#endif /* XMLADAPTER_H_ */
+#endif /* if !defined DP2P_VLC || DP2P_VLC == 0 */
+
+#endif /* DASHP2P_H_ */

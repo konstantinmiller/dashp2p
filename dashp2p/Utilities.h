@@ -23,17 +23,21 @@
 #ifndef UTILITIES_H_
 #define UTILITIES_H_
 
-
-#include "Dashp2pTypes.h"
-#include <assert.h>
+//#include "Dashp2pTypes.h"
 #include <string>
 #include <vector>
+#include <stdexcept>
+#include <cassert>
+//#include <cinttypes>
 
+using std::string;
 
-namespace dash {
+class HttpMethod;
+
+namespace dashp2p {
 
 bool operator>=(const struct timespec& a, const struct timespec& b);
-bool operator>(const struct timespec& a, const dash::Usec& b);
+bool operator>(const struct timespec& a, const int64_t& b);
 struct timespec operator+(const struct timespec& a, const struct timespec& b);
 struct timespec operator-(const struct timespec& a, const struct timespec& b);
 
@@ -101,18 +105,19 @@ class Utilities
  * Time
  *************************************************************************/
 public:
-    static Usec getTime();
-    static Usec getAbsTime();
-    static std::string getTimeString(Usec t = 0, bool showDate = true);
+    static int64_t getTime();
+    static int64_t getAbsTime();
+    static std::string getTimeString(int64_t t = 0, bool showDate = true);
     static std::string getTimeString(const struct timespec& t, bool showDate = true);
     static double now();
     static void setReferenceTime() {/* dp2p_assert(referenceTime==0); */ referenceTime = getTime();} // TODO: hanle nicely!
-    static Usec getReferenceTime() {return referenceTime;}
-    static Usec convertTime2Epoch(const string& str);
-    static Usec convertTime(const string& str);
-    static struct timespec add(const struct timespec& a, const Usec& usec);
+    static int64_t getReferenceTime() {return referenceTime;}
+    static int64_t convertTime2Epoch(const string& str);
+    static int64_t convertTime(const string& str);
+    static struct timespec add(const struct timespec& a, const int64_t& usec);
+    static struct timeval usec2tv(const int64_t& usec);
 private:
-    static Usec referenceTime;
+    static int64_t referenceTime;
 
 /*************************************************************************
  * Sleeping
@@ -147,9 +152,10 @@ public:
  * Construction and destruction
  *************************************************************************/
 private:
-    Utilities(){dp2p_assert(0);}
-    virtual ~Utilities(){dp2p_assert(0);}
+    Utilities() {throw std::logic_error("Utilities class cannot be instantiated.");}
+    virtual ~Utilities() {throw std::logic_error("Utilities class cannot be instantiated (and thus destroyed).");}
 };
-} // namespace dash
+
+} // namespace dashp2p
 
 #endif

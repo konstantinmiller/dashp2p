@@ -23,20 +23,19 @@
 
 #include "ContentId.h"
 #include "ControlLogic.h"
-#include "ControlLogicActionCloseTcpConnection.h"
-#include "ControlLogicActionCreateTcpConnection.h"
-#include "ControlLogicActionStartDownload.h"
+#include "ControlLogicAction.h"
+#include "HttpRequestManager.h"
 #include "Statistics.h"
-#include <assert.h>
 
+#include <cassert>
 
-ControlLogic::ControlLogic(int width, int height, Usec startPosition, Usec stopPosition)
+namespace dashp2p {
+
+ControlLogic::ControlLogic(int width, int height)
   : state(NO_MPD),
     mutex(),
     width(width),
     height(height),
-    startPosition(startPosition),
-    stopPosition(stopPosition),
     bitRates(),
     ifData(),
     contour(),
@@ -100,7 +99,7 @@ list<ControlLogicAction*> ControlLogic::processEvent(ControlLogicEvent* e)
     	break;
     }
 
-    case Event_Disconnect: {
+    /*case Event_Disconnect: {
     	const ControlLogicEventDisconnect& event = dynamic_cast<const ControlLogicEventDisconnect&>(*e);
     	actions = processEventDisconnect(event);
     	break;
@@ -118,7 +117,7 @@ list<ControlLogicAction*> ControlLogic::processEvent(ControlLogicEvent* e)
         const ControlLogicEventResumePlayback& event = dynamic_cast<const ControlLogicEventResumePlayback&>(*e);
         actions = processEventResumePlayback(event);
         break;
-    }
+    }*/
 
     case Event_StartPlayback: {
     	const ControlLogicEventStartPlayback& event = dynamic_cast<const ControlLogicEventStartPlayback&>(*e);
@@ -127,8 +126,8 @@ list<ControlLogicAction*> ControlLogic::processEvent(ControlLogicEvent* e)
     }
 
     default:
-        dp2p_assert(0);
-        break;
+        ERRMSG("Got unexpected event: %s.", e->toString().c_str());
+        throw std::runtime_error("Got unexpected event in ControlLogic.");
     }
 
     delete e;
@@ -142,6 +141,7 @@ list<ControlLogicAction*> ControlLogic::processEvent(ControlLogicEvent* e)
     return actions;
 }
 
+#if 0
 list<ControlLogicAction*> ControlLogic::actionRejected(ControlLogicAction* a)
 {
 	dp2p_assert(a);
@@ -184,16 +184,17 @@ list<ControlLogicAction*> ControlLogic::actionRejected(ControlLogicAction* a)
     ThreadAdapter::mutexUnlock(&mutex);
     return actions;
 }
+#endif
 
 int ControlLogic::getStartSegment() const
 {
-	const int periodIndex = 0;
-	const int adaptationSetIndex = 0;
-	const int representationIndex = 0;
+	//const int periodIndex = 0;
+	//const int adaptationSetIndex = 0;
+	//const int representationIndex = 0;
 
-	int ret = 1 + startPosition / mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex);
-	dp2p_assert(ret > 0 && ret < mpdWrapper->getNumSegments(periodIndex, adaptationSetIndex, representationIndex));
-	return ret;
+	//int ret = 1 + startPosition / mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex);
+	//dp2p_assert(ret > 0 && ret < mpdWrapper->getNumSegments(periodIndex, adaptationSetIndex, representationIndex));
+	return 1;
 }
 
 int ControlLogic::getStopSegment() const
@@ -203,17 +204,17 @@ int ControlLogic::getStopSegment() const
 	const int representationIndex = 0;
 
 	int ret;
-	if(stopPosition == 0)
+	//if(stopPosition == 0)
 		ret = mpdWrapper->getNumSegments(periodIndex, adaptationSetIndex, representationIndex) - 1;
-	else
-		ret = ((stopPosition % mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex) == 0) ? 0 : 1) + stopPosition / mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex);
+	//else
+	//	ret = ((stopPosition % mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex) == 0) ? 0 : 1) + stopPosition / mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex);
 	dp2p_assert(ret > 0 && ret < mpdWrapper->getNumSegments(periodIndex, adaptationSetIndex, representationIndex));
 	return ret;
 }
 
 list<ControlLogicAction*> ControlLogic::processEventDataReceived(ControlLogicEventDataReceived& e)
 {
-	switch(e.getContentType())
+	switch(HttpRequestManager::getContentType(e.reqId))
 	{
 
 	case ContentType_Mpd:
@@ -221,18 +222,18 @@ list<ControlLogicAction*> ControlLogic::processEventDataReceived(ControlLogicEve
 		dp2p_assert(contour.empty());
 		return processEventDataReceivedMpd(e);
 
-	case ContentType_MpdPeer:
+	/*case ContentType_MpdPeer:
 		dp2p_assert(state == HAVE_MPD);
-		return processEventDataReceivedMpdPeer(e);
+		return processEventDataReceivedMpdPeer(e);*/
 
 	case ContentType_Segment:
 		dp2p_assert(state == HAVE_MPD);
 		dp2p_assert(!contour.empty());
 		return processEventDataReceivedSegment(e);
 
-	case ContentType_Tracker:
+	/*case ContentType_Tracker:
 		dp2p_assert(state == HAVE_MPD);
-		return processEventDataReceivedTracker(e);
+		return processEventDataReceivedTracker(e);*/
 
 	default:
 		ERRMSG("Unknown content type.");
@@ -250,8 +251,8 @@ bool ControlLogic::ackActionConnected (const ConnectionId& connId)
 	{
 		ControlLogicAction* _a = *it;
 		if(_a->getType() == Action_CreateTcpConnection) {
-			ControlLogicActionCreateTcpConnection* a = dynamic_cast<ControlLogicActionCreateTcpConnection*>(_a);
-			if(a->id == connId) {
+			ControlLogicActionOpenTcpConnection* a = dynamic_cast<ControlLogicActionOpenTcpConnection*>(_a);
+			if(a->tcpConnectionId == connId) {
 				++ret;
 				delete a;
 				ActionList::iterator jt = it;
@@ -315,7 +316,7 @@ bool ControlLogic::ackActionDisconnect (const ConnectionId& connId)
 		ControlLogicAction* _a = *it;
 		if(_a->getType() == Action_CloseTcpConnection) {
 			ControlLogicActionCloseTcpConnection* a = dynamic_cast<ControlLogicActionCloseTcpConnection*>(_a);
-			if(a->id == connId) {
+			if(a->tcpConnectionId == connId) {
 				++ret;
 				delete a;
 				ActionList::iterator jt = it;
@@ -356,7 +357,7 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 #endif
 
 	/* Logging. */
-	Statistics::recordScalarDouble("completedDownloadMPD", dash::Utilities::now());
+	Statistics::recordScalarDouble("completedDownloadMPD", dashp2p::Utilities::now());
 
 	/* Parse MPD */
 	mpdWrapper = new MpdWrapper(mpdDataField->getCopy((char*)malloc(mpdDataField->getReservedSize() * sizeof(char)), mpdDataField->getReservedSize()), mpdDataField->getReservedSize()); // we reserve this memory with malloc since it will be freed by the VLC XML plugin which uses free()
@@ -366,7 +367,7 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 
 	/* Logging. */
 	DBGMSG("Parsed MPD file.");
-	Statistics::recordScalarDouble("parsedMPD", dash::Utilities::now());
+	Statistics::recordScalarDouble("parsedMPD", dashp2p::Utilities::now());
 	Statistics::recordScalarDouble("videoDuration", mpdWrapper->getVideoDuration() / 1e6);
 
 	/* Give MPD to the Statistics module */
@@ -424,12 +425,14 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 
 ControlLogicAction* ControlLogic::createActionDownloadSegments(list<const ContentId*> segIds, int connId, HttpMethod httpMethod) const
 {
-	list<dash::URL> urls;
+	list<dashp2p::URL> urls;
 	list<HttpMethod> httpMethods;
 	for(list<const ContentId*>::const_iterator it = segIds.begin(); it != segIds.end(); ++it) {
 		//DBGMSG("%s", (*it)->toString().c_str());
-		urls.push_back(dash::Utilities::splitURL(mpdWrapper->getSegmentURL(dynamic_cast<const ContentIdSegment&>(**it))));
+		urls.push_back(dashp2p::Utilities::splitURL(mpdWrapper->getSegmentURL(dynamic_cast<const ContentIdSegment&>(**it))));
 		httpMethods.push_back(httpMethod);
 	}
 	return new ControlLogicActionStartDownload(connId, segIds, urls, httpMethods);
+}
+
 }

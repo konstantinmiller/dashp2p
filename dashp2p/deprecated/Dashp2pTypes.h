@@ -66,13 +66,7 @@ using std::ostringstream;
  * ... *
  **********/
 
-/* microseconds */
-namespace dash {
-typedef int64_t Usec;
-}
-
-
-namespace dash {
+namespace dashp2p {
 enum DASHSegmentType {SEG_MPD, SEG_REG, SEG_INIT};
 }
 
@@ -152,7 +146,8 @@ enum ReconnectReason {
 	ReconnectReason_HttpKeepAliveMaxPreventive = 2,
 	ReconnectReason_HttpKeepAliveTimeout = 3,
 	ReconnectReason_HttpKeepAliveTimeoutPreventive = 4,
-	ReconnectReason_Other = 5, };
+	ReconnectReason_Other = 5
+};
 
 /* Type to represent TCP states that are missing on the Android system. Copied from netinet/tcp.h on Linux. */
 #ifdef __ANDROID__

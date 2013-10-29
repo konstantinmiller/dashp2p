@@ -23,12 +23,14 @@
 #ifndef DASHHTTP_H_
 #define DASHHTTP_H_
 
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
+#include "dashp2p.h"
 #include "Utilities.h"
 //#include "Statistics.h"
 #include "ThreadAdapter.h"
 #include "DebugAdapter.h"
-#include "HttpRequest.h"
+#include "HttpRequestManager.h"
+
 #include <semaphore.h>
 #include <string>
 #include <list>
@@ -41,35 +43,41 @@
 using std::list;
 using std::max;
 using std::min;
-using dash::Usec;
-using dash::Utilities;
+//using dashp2p::Utilities;
 
+namespace dashp2p {
 
 class DashHttp
 {
+/* Private types */
+private:
+	struct InternalEvent {
+		bool socketEvent = false;
+		bool newRequests = false;
+	};
+
 /* Public methods. */
 public:
     /** Constructor that also initializes DashHttp.
      *  @parameter id                      Identifier, provided by caller, used later in call-back functions to identify the connection.
-     *  @parameter clientSideRequestLimit  Maximum number of pipelined (not queued) requests. 0 means unlimited.
      *  @parameter cb                      Call-back function for all kinds of events. */
-    DashHttp(ConnectionId id, const string& hostName, int port, const IfData& ifData, int clientSideRequestLimit, HttpCb cb);
+    DashHttp(ConnectionId id, HttpCb cb);
 
     virtual ~DashHttp();
 
     /** Registers new GET or HEAD request(s).
      *  @param reqs  List of HttpRequests. We take over the responsibility to delete them later.
      *  @return      True if the requests were accepted (queued, not sent), false otherwise. It does not tell you if the requests were actually sent. */
-    bool newRequest(list<HttpRequest*> reqs);
+    bool newRequest(const list<int>& reqs);
 
     /** Convenience method to register one GET or HEAD request. Internally calls the more general method accepting a list of requests. */
-    bool newRequest(HttpRequest* req) {return newRequest(list<HttpRequest*>(1, req));}
+    bool newRequest(const int reqId) {return newRequest(list<int>(1, reqId));}
 
     int hasRequests();
 
     //string getIfName() const {return ifData.name;}
     //string getIfAddr() const {return ifData.printAddress();}
-    string getIfString() const {return ifData.toString();}
+    //string getIfString() const {return ifData.toString();}
 
 /* Protected methods. */
 protected:
@@ -77,31 +85,30 @@ protected:
     /* Main thread function. */
     void threadMain();
     static void* startThread(void* params);
-    struct timeval calculateSelectTimeout();
-    pair<bool,bool> waitSelect(struct timeval selectTimeout);
-    int checkIfSocketHasData();
+    int64_t calculateWaitingTimeout();
+    InternalEvent waitForEvents(const int64_t& to);
+    //int checkIfSocketHasData();
     //bool checkIfHaveNewRequests();
 
     /**** Output to higher instances *****/
     void reportDisconnect();
-    void reportKeepAliveMaxReached();
+    //void reportKeepAliveMaxReached();
 
     /* Socket related. */
-    void connect();
+    //void connect();
     //void keepAliveSocket();
     //void forceReconnect();
-    pair<int,int> getSocketBufferLengths() const;
-    void assertSocketHealth() const;
+    //pair<int,int> getSocketBufferLengths() const;
+    //void assertSocketHealth() const;
     string getUnexpectedDisconnectMessage() const;
 
     /* Queue related stuff. Must be protected by reqQueueMutex */
     bool havePendingRequests() const;
     int getNumPendingRequests() const;
-    const HttpRequest& getQueuedRequest(ReqId reqId) const;
     string reqQueue2String() const;
 
     /***** HTTP related stuff *****/
-    void readFromSocket(int bytesExpected);
+    //void readFromSocket(int bytesExpected);
     void processNewData();
     void requeuePendingRequests(int numAllowed);
     /* Check if new requests can be send and send the appropriate number of them.
@@ -109,16 +116,15 @@ protected:
      * Returns true, if new GETs were issued. Otherwise false. */
     bool checkStartNewRequests();
     /* Must only be called from checkStartNewRequests(). Must run in the main thread! */
-    void sendHttpRequest(const list<ReqId>& reqsToSend);
-    int parseData(const char* p, int size, HttpRequest* req, double recvTimestamp);
-    void parseHeader(HttpRequest* req) const;
-    string serverState2String() const;
+    void sendHttpRequest(const list<int>& reqsToSend);
+    int parseData(const char* p, int size, const int reqId, double recvTimestamp);
+    void parseHeader(const int reqId) const;
+    //string serverState2String() const;
     string connectionState2String() const;
-    dash::Usec calculateExpectedHttpTimeout() const;
+    int64_t calculateExpectedHttpTimeout() const;
 
     /* TCP related stuff */
-    void updateTcpInfo();
-    void logTCPState(const char* reason);
+    //void logTCPState(const char* reason);
 
     /***** throughput related stuff *****/
     //int64_t getOutstandingPldBytes() const;
@@ -133,51 +139,18 @@ private:
     int fdWakeUpSelect;
 
     /* Request queue, mutex and semaphore for the request queue. */
-    list<HttpRequest*> reqQueue;
-    list<HttpRequest*> newReqs;
+    list<int> reqQueue;
+    list<int> newReqs;
     Mutex newReqsMutex;
     int fdNewReqs;
 
     /* Main thread. */
     Thread mainThread;
 
-    /* Connection related data. */
-    int fdSocket;
-    struct tcp_info* lastTcpInfo;
-    IfData ifData;
-    int clientSideRequestLimit;
-    int numConnectEvents;
-    int numReqsCompletedOverCurrentTcpConnection;
-
-    /* Server related data */
-    class ServerInfo
-    {
-    public:
-    	ServerInfo(string hostName) :
-    		hostName(hostName),
-    		hostAddr(),
-    		keepAliveMax(-1),
-    		keepAliveMaxRemaining(-1),
-    		keepAliveTimeout(-1),
-    		keepAliveTimeoutNext(-1),
-    		aHdrReceived(false) {}
-    	string hostName;
-    	struct sockaddr_in hostAddr;
-    	int keepAliveMax;
-    	int keepAliveMaxRemaining;
-    	Usec keepAliveTimeout;
-    	Usec keepAliveTimeoutNext;
-    	bool aHdrReceived;
-    } serverInfo;
-
-    /* Buffer for reading data from the socket. */
-    const int32_t recvBufSize;
-    int32_t recvBufContent;
-    char* recvBuf;
-    double recvTimestamp;
-
     /* Callback for downloaded data. */
     HttpCb cb;
 };
+
+}
 
 #endif /* DASHHTTP_H_ */

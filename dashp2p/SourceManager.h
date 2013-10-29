@@ -1,9 +1,9 @@
 /****************************************************************************
- * Dashp2p.h                                                                *
+ * SourceManager.h                                                          *
  ****************************************************************************
- * Copyright (C) 2012 Technische Universitaet Berlin                        *
+ * Copyright (C) 2013 Technische Universitaet Berlin                        *
  *                                                                          *
- * Created on: Jan 31, 2013                                                 *
+ * Created on: Oct 25, 2013                                                 *
  * Authors: Konstantin Miller <konstantin.miller@tu-berlin.de>              *
  *                                                                          *
  * This program is free software: you can redistribute it and/or modify     *
@@ -20,41 +20,45 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
  ****************************************************************************/
 
-#ifndef DASHP2P_H_
-#define DASHP2P_H_
+#ifndef SOURCEMANAGER_H_
+#define SOURCEMANAGER_H_
 
-#if !defined DP2P_VLC || DP2P_VLC == 0
-
+#include <netinet/in.h>
+#include <vector>
 #include <string>
+using std::vector;
+using std::string;
 
-#include "Utilities.h"
-#include "Statistics.h"
-#include "ContentIdGeneric.h"
+namespace dashp2p {
 
-namespace dp2p {
-
-class Dashp2p
+class SourceData
 {
-public:
-	Dashp2p();
-	virtual ~Dashp2p();
-
-	static void initDebugging(DebuggingLevel dl, const char* logFileName);
-	static void initXml();
-	static void initStatistics(const std::string& logDir, const bool logTcpState, const bool logScalarValues, const bool logAdaptationDecision,
-			const bool logGiveDataToVlc, const bool logBytesStored, const bool logSecStored, const bool logUnderruns,
-			const bool logReconnects, const bool logSegmentSizes, const bool logRequestStatistics,
-			const bool logRequestDownloadProgress);
-	static void setReferenceTime();
-
-	static void cleanup();
-	static void cleanupDebugging();
-
-	static void setDebugFile(const char* dbgFileName);
+public: /* public methods */
+	SourceData(const string& hostName, const int& port);
+	virtual ~SourceData(){}
+public: /* public fields */
+	const string hostName;
+	const int port;
+	int keepAliveMax;
+	int64_t keepAliveTimeout;
+	struct sockaddr_in hostAddr;
 };
 
-} /* namespace dp2p */
+class SourceManager
+{
+public:
+	static void cleanup();
+	static int add(const string& hostName, const int& port = 80);
+	static SourceData& get(const int& srcId) {return *srcVec.at(srcId);}
+	static string sourceState2String(const int& srcId);
 
-#endif /* if !defined DP2P_VLC || DP2P_VLC == 0 */
+private:
+	SourceManager(){}
+	virtual ~SourceManager(){}
 
-#endif /* DASHP2P_H_ */
+private:
+	static vector<SourceData*> srcVec;
+};
+
+} /* namespace dashp2p */
+#endif /* SOURCEMANAGER_H_ */

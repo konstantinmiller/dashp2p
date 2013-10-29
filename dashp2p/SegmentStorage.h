@@ -23,14 +23,14 @@
 #ifndef SEGMENTSTORAGE_H_
 #define SEGMENTSTORAGE_H_
 
-
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
 #include "DashSegment.h"
 #include "Contour.h"
-#include "ContentIdSegment.h"
+#include "ContentId.h"
 #include <map>
 using std::map;
 
+namespace dashp2p {
 
 class StreamPosition {
 public:
@@ -51,15 +51,15 @@ public:
     virtual ~SegmentStorage();
     void clear();
     bool initialized(ContentIdSegment segId) const;
-    void initSegment(ContentIdSegment segId, int64_t numBytes, dash::Usec duration);
+    void initSegment(ContentIdSegment segId, int64_t numBytes, int64_t duration);
     void addData(ContentIdSegment segId, int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite);
-    StreamPosition getData(StreamPosition startPos, Contour contour, char** buffer, int* bufferSize, int* bytesReturned, dash::Usec* usecReturned);
-    StreamPosition getSegmentData(StreamPosition startPos, char** buffer, int* bufferSize, int* bytesReturned, dash::Usec* usecReturned);
+    StreamPosition getData(StreamPosition startPos, Contour contour, char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned);
+    StreamPosition getSegmentData(StreamPosition startPos, char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned);
     int64_t getTotalSize(ContentIdSegment segId) const;
     int64_t getTotalDuration(ContentIdSegment segId) const;
     const DashSegment& getSegment(ContentIdSegment segId) const;
     /* contiguous interval starting exactly at strPos */
-    pair<dash::Usec, int64_t> getContigInterval(StreamPosition strPos, Contour contour) const;
+    pair<int64_t, int64_t> getContigInterval(StreamPosition strPos, Contour contour) const;
     /* If data is available at the exactly position strPos */
     bool dataAvailable(StreamPosition strPos) const;
     string printDownloadedData(int startSegNr, int64_t offset) const;
@@ -77,5 +77,7 @@ private:
 private:
      SegMap segMap;
 };
+
+}
 
 #endif /* SEGMENTSTORAGE_H_ */

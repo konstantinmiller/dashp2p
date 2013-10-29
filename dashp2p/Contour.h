@@ -23,14 +23,14 @@
 #ifndef CONTOUR_H_
 #define CONTOUR_H_
 
-
-#include "Dashp2pTypes.h"
-#include "ContentIdSegment.h"
+//#include "Dashp2pTypes.h"
+#include "ContentId.h"
 #include <list>
 #include <map>
 using std::list;
 using std::multimap;
 
+namespace dashp2p {
 
 class Contour
 {
@@ -55,5 +55,7 @@ private:
 private:
     ContourMap c;
 };
+
+}
 
 #endif /* CONTOUR_H_ */

@@ -2,5 +2,4 @@
 .project
 *.o
 libdashp2p_plugin.so
-libdashp2p.so
 vlc.log

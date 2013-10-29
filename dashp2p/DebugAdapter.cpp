@@ -20,7 +20,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
  ****************************************************************************/
 
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
 #include <cstdio>
 #include <cstdarg>
 #include <assert.h>
@@ -31,6 +31,7 @@
 # include <android/log.h>
 #endif
 
+namespace dashp2p {
 
 bool DebugAdapter::initialized = false;
 Mutex DebugAdapter::mutex;
@@ -38,9 +39,7 @@ const unsigned DebugAdapter::bufLen = 10 * 1048576;
 char* DebugAdapter::buf = NULL;
 FILE* DebugAdapter::f = NULL;
 DebuggingLevel DebugAdapter::debuggingLevel = DebuggingLevel_Info;
-#if DP2P_VLC != 0
 vlc_object_t* DebugAdapter::dashp2pPluginObject = NULL;
-#endif
 
 /* interne macros that do not try to lock the mutex */
 # define _dp2p_assert(x)               do {\
@@ -59,11 +58,8 @@ vlc_object_t* DebugAdapter::dashp2pPluginObject = NULL;
 	                                  } while(false)
 
 
-#if DP2P_VLC != 0
-    void DebugAdapter::init(DebuggingLevel debuggingLevel, vlc_object_t* dashp2pPluginObject, const char* dbgFileName)
-#else
-    void DebugAdapter::init(DebuggingLevel debuggingLevel, const char* dbgFileName)
-#endif
+void DebugAdapter::init(DebuggingLevel debuggingLevel, vlc_object_t* dashp2pPluginObject, const char* dbgFileName)
+//void DebugAdapter::init(DebuggingLevel debuggingLevel, const char* dbgFileName)
 {
     assert(!initialized);
 
@@ -72,10 +68,8 @@ vlc_object_t* DebugAdapter::dashp2pPluginObject = NULL;
     dp2p_assert(buf == NULL);
     ThreadAdapter::mutexInit(&mutex);
 
-#if DP2P_VLC != 0
     buf = new char[bufLen];
     DebugAdapter::dashp2pPluginObject = dashp2pPluginObject;
-#endif
 
     if(dbgFileName != NULL) {
         f = fopen(dbgFileName, "wx");
@@ -95,11 +89,9 @@ void DebugAdapter::cleanUp()
         f = NULL;
     }
 
-#if DP2P_VLC != 0
-        _dp2p_assert(buf != NULL);
-        delete [] buf;
-        buf = NULL;
-#endif
+    _dp2p_assert(buf != NULL);
+    delete [] buf;
+    buf = NULL;
 
     initialized = false;
 
@@ -116,6 +108,21 @@ void DebugAdapter::setDebugFile(const char* dbgFileName)
 	f = fopen(dbgFileName, "wx");
 	_dp2p_assert_v(f, "Could not open file %s.", dbgFileName);
 	ThreadAdapter::mutexUnlock(&mutex);
+}
+
+void DebugAdapter::throwRuntime(const char* fileName, const char* functionName, int lineNr, ...)
+{
+	static char buf[2048];
+
+	va_list argList;
+	va_start(argList, lineNr);
+	const char* message = va_arg(argList, char*);
+	int cnt = std::sprintf(buf, "ERROR in %s::%s() (%d): ", fileName, functionName, lineNr);
+	cnt += std::vsprintf(buf + cnt, message, argList);
+	cnt += std::sprintf(buf + cnt, "\n");
+	va_end(argList);
+
+    throw std::runtime_error(buf);
 }
 
 void DebugAdapter::errPrintf(const char* msg, ...)
@@ -138,13 +145,10 @@ void DebugAdapter::errPrintf(const char* msg, ...)
 
     va_list argList;
     va_start(argList, msg);
-#if DP2P_VLC != 0
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_ERR, "DASHP2P", msg, argList);
-#else
-    printf("ERROR: ");
-    vprintf(msg, argList);
-    printf("\n");
-#endif
+    //printf("ERROR: ");
+    //vprintf(msg, argList);
+    //printf("\n");
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -159,7 +163,7 @@ void DebugAdapter::errPrintfWt(const char* msg, ...)
 
     ThreadAdapter::mutexLock(&mutex);
 
-    const string timeString = dash::Utilities::getTimeString(0, false);
+    const string timeString = dashp2p::Utilities::getTimeString(0, false);
 
     if(f) {
         va_list argList;
@@ -172,13 +176,10 @@ void DebugAdapter::errPrintfWt(const char* msg, ...)
 
     va_list argList;
     va_start(argList, msg);
-#if DP2P_VLC != 0
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_ERR, "DASHP2P", msg, argList);
-#else
-    printf("[%s] ERROR: ", timeString.c_str());
-    vprintf(msg, argList);
-    printf("\n");
-#endif
+    //printf("[%s] ERROR: ", timeString.c_str());
+    //vprintf(msg, argList);
+    //printf("\n");
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -207,20 +208,20 @@ void DebugAdapter::errPrintfWl(const char* fileName, const char* functionName, i
     va_list argList;
     va_start(argList, lineNr);
     const char* message = va_arg(argList, char*);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     assert(strlen(message) < bufLen);
     sprintf(buf, "ERROR in %s::%s() (%d): %s", fileName, functionName, lineNr, message);
-#  ifdef __ANDROID__
-    __android_log_vprint(ANDROID_LOG_ERROR, "VLC/dashp2p", buf, argList);
-#  else
+//#  ifdef __ANDROID__
+//    __android_log_vprint(ANDROID_LOG_ERROR, "VLC/dashp2p", buf, argList);
+//#  else
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_ERR, "DASHP2P", buf, argList);
-#  endif
-#else
-    printf("ERROR in %s::%s() (%d): ", fileName, functionName, lineNr);
-    vprintf(message, argList);
-    printf("\n");
-    //fflush(stdout);
-#endif
+//#  endif
+//#else
+//    printf("ERROR in %s::%s() (%d): ", fileName, functionName, lineNr);
+//    vprintf(message, argList);
+//    printf("\n");
+//    //fflush(stdout);
+//#endif
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -246,13 +247,13 @@ void DebugAdapter::warnPrintf(const char* msg, ...)
 
     va_list argList;
     va_start(argList, msg);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_WARN, "DASHP2P", msg, argList);
-#else
-    printf("WARNING: ");
-    vprintf(msg, argList);
-    printf("\n");
-#endif
+//#else
+//    printf("WARNING: ");
+//    vprintf(msg, argList);
+//    printf("\n");
+//#endif
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -267,7 +268,7 @@ void DebugAdapter::warnPrintfWt(const char* msg, ...)
 
     ThreadAdapter::mutexLock(&mutex);
 
-    const string timeString = dash::Utilities::getTimeString(0, false);
+    const string timeString = dashp2p::Utilities::getTimeString(0, false);
 
     if(f) {
         va_list argList;
@@ -280,13 +281,13 @@ void DebugAdapter::warnPrintfWt(const char* msg, ...)
 
     va_list argList;
     va_start(argList, msg);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_WARN, "DASHP2P", msg, argList);
-#else
-    printf("[%s] WARNING: ", timeString.c_str());
-    vprintf(msg, argList);
-    printf("\n");
-#endif
+//#else
+//    printf("[%s] WARNING: ", timeString.c_str());
+//    vprintf(msg, argList);
+//    printf("\n");
+//#endif
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -315,16 +316,16 @@ void DebugAdapter::warnPrintfWl(const char* fileName, const char* functionName, 
     va_list argList;
     va_start(argList, lineNr);
     const char* message = va_arg(argList, char*);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     _dp2p_assert(strlen(message) < bufLen);
    	sprintf(buf, "WARNING in %s::%s() (%d): %s", fileName, functionName, lineNr, message);
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_WARN, "DASHP2P", buf, argList);
-#else
-    printf("WARNING in %s::%s() (%d): ", fileName, functionName, lineNr);
-    vprintf(message, argList);
-    printf("\n");
-    //fflush(stdout);
-#endif
+//#else
+//    printf("WARNING in %s::%s() (%d): ", fileName, functionName, lineNr);
+//    vprintf(message, argList);
+//    printf("\n");
+//    //fflush(stdout);
+//#endif
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -350,13 +351,13 @@ void DebugAdapter::infoPrintf(const char* msg, ...)
 
     va_list argList;
     va_start(argList, msg);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_INFO, "DASHP2P", msg, argList);
-#else
-    printf("INFO: ");
-    vprintf(msg, argList);
-    printf("\n");
-#endif
+//#else
+//    printf("INFO: ");
+//    vprintf(msg, argList);
+//    printf("\n");
+//#endif
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -371,7 +372,7 @@ void DebugAdapter::infoPrintfWt(const char* msg, ...)
 
     ThreadAdapter::mutexLock(&mutex);
 
-    const string timeString = dash::Utilities::getTimeString(0, false);
+    const string timeString = dashp2p::Utilities::getTimeString(0, false);
 
     if(f) {
         va_list argList;
@@ -384,13 +385,13 @@ void DebugAdapter::infoPrintfWt(const char* msg, ...)
 
     va_list argList;
     va_start(argList, msg);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_INFO, "DASHP2P", msg, argList);
-#else
-    printf("[%s] INFO: ", timeString.c_str());
-    vprintf(msg, argList);
-    printf("\n");
-#endif
+//#else
+//    printf("[%s] INFO: ", timeString.c_str());
+//    vprintf(msg, argList);
+//    printf("\n");
+//#endif
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -419,16 +420,16 @@ void DebugAdapter::infoPrintfWl(const char* fileName, const char* functionName, 
     va_list argList;
     va_start(argList, lineNr);
     const char* message = va_arg(argList, char*);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     _dp2p_assert(strlen(message) < bufLen);
     sprintf(buf, "INFO in %s::%s() (%d): %s", fileName, functionName, lineNr, message);
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_INFO, "DASHP2P", buf, argList);
-#else
-    printf("INFO in %s::%s() (%d): ", fileName, functionName, lineNr);
-    vprintf(message, argList);
-    printf("\n");
-    //fflush(stdout);
-#endif
+//#else
+//    printf("INFO in %s::%s() (%d): ", fileName, functionName, lineNr);
+//    vprintf(message, argList);
+//    printf("\n");
+//    //fflush(stdout);
+//#endif
     va_end(argList);
 
     ThreadAdapter::mutexUnlock(&mutex);
@@ -443,7 +444,7 @@ void DebugAdapter::dbgPrintf(const char* fileName, const char* functionName, int
 
     ThreadAdapter::mutexLock(&mutex);
 
-    const dash::Usec absNow = dash::Utilities::getTime();
+    const int64_t absNow = dashp2p::Utilities::getTime();
 
     if(f)
     {
@@ -460,18 +461,18 @@ void DebugAdapter::dbgPrintf(const char* fileName, const char* functionName, int
     va_list argList;
     va_start(argList, lineNr);
     const char* message = va_arg(argList, char*);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     _dp2p_assert(strlen(message) < bufLen);
     sprintf(buf, "%s::%s() (%d): %s", fileName, functionName, lineNr, message);
     static char tmpBuf[64];
     sprintf(tmpBuf, "[%11.6f] DASHP2P", absNow / 1e6);
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_DBG, tmpBuf, buf, argList);
-#else
-    printf("[%11.4f] %s::%s() (%d): ", absNow / 1e6, fileName, functionName, lineNr);
-    vprintf(message, argList);
-    printf("\n");
-    //fflush(stdout);
-#endif
+//#else
+//    printf("[%11.4f] %s::%s() (%d): ", absNow / 1e6, fileName, functionName, lineNr);
+//    vprintf(message, argList);
+//    printf("\n");
+//    //fflush(stdout);
+//#endif
     va_end(argList);
 
 
@@ -501,21 +502,23 @@ void DebugAdapter::_errPrintfWl(const char* fileName, const char* functionName, 
     va_list argList;
     va_start(argList, lineNr);
     const char* message = va_arg(argList, char*);
-#if DP2P_VLC != 0
+//#if DP2P_VLC != 0
     assert(strlen(message) < bufLen);
     sprintf(buf, "ERROR in %s::%s() (%d): %s", fileName, functionName, lineNr, message);
-#  ifdef __ANDROID__
-    __android_log_vprint(ANDROID_LOG_ERROR, "VLC/dashp2p", buf, argList);
-#  else
+//#  ifdef __ANDROID__
+//    __android_log_vprint(ANDROID_LOG_ERROR, "VLC/dashp2p", buf, argList);
+//#  else
     msg_GenericVa( dashp2pPluginObject, VLC_MSG_ERR, "DASHP2P", buf, argList);
-#  endif
-#else
-    printf("ERROR in %s::%s() (%d): ", fileName, functionName, lineNr);
-    vprintf(message, argList);
-    printf("\n");
-    //fflush(stdout);
-#endif
+//#  endif
+//#else
+//    printf("ERROR in %s::%s() (%d): ", fileName, functionName, lineNr);
+//    vprintf(message, argList);
+//    printf("\n");
+//    //fflush(stdout);
+//#endif
     va_end(argList);
 
     //ThreadAdapter::mutexUnlock(&mutex);
+}
+
 }

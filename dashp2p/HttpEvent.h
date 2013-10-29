@@ -23,7 +23,12 @@
 #ifndef HTTPEVENT_H_
 #define HTTPEVENT_H_
 
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
+#include "dashp2p.h"
+#include <list>
+using std::list;
+
+namespace dashp2p {
 
 class HttpEvent {
 public:
@@ -35,7 +40,7 @@ public:
 	virtual string toString() const
 	{
 		switch(getType()) {
-		case HttpEvent_Connected:    return "Connected";
+		//case HttpEvent_Connected:    return "Connected";
 		case HttpEvent_DataReceived: return "DataReceived";
 		case HttpEvent_Disconnect:   return "Disconnect";
 		default:
@@ -47,5 +52,47 @@ public:
 private:
 	const int32_t connId;
 };
+
+
+/*class HttpEventConnected: public HttpEvent
+{
+public:
+	HttpEventConnected(int connId): HttpEvent(connId) {}
+	virtual ~HttpEventConnected(){}
+	virtual HttpEventType getType() const {return HttpEvent_Connected;}
+};*/
+
+
+class HttpEventDataReceived: public HttpEvent
+{
+public:
+	HttpEventDataReceived(int32_t connId, int reqId, int64_t byteFrom, int64_t byteTo)
+	  : HttpEvent(connId),
+	    byteFrom(byteFrom),
+	    byteTo(byteTo),
+	    reqId(reqId) {}
+	virtual ~HttpEventDataReceived() {}
+	virtual HttpEventType getType() const {return HttpEvent_DataReceived;}
+
+public:
+	const int64_t byteFrom;
+	const int64_t byteTo;
+	const int reqId;
+
+};
+
+
+class HttpEventDisconnect: public HttpEvent
+{
+public:
+	HttpEventDisconnect(int connId, list<int> reqs): HttpEvent(connId), reqs(reqs) {}
+	virtual ~HttpEventDisconnect(){}
+	virtual HttpEventType getType() const {return HttpEvent_Disconnect;}
+
+public:
+	const list<int> reqs;
+};
+
+}
 
 #endif /* HTTPEVENT_H_ */

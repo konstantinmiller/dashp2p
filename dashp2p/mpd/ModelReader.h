@@ -29,17 +29,17 @@
 
 #include <vector>
 
-namespace dash {
+namespace dashp2p {
     namespace mpd {
         class ModelReader {
         public:
             ModelReader(const ModelFactory& factory);
             ~ModelReader();
 
-            MediaPresentationDescription* read(dash::xml::BasicDocument& xmlDocument);
+            MediaPresentationDescription* read(dashp2p::xml::BasicDocument& xmlDocument);
 
         private:
-            class ModelHandler: public dash::xml::BasicDocumentHandler {
+            class ModelHandler: public dashp2p::xml::BasicDocumentHandler {
             public:
                 ModelHandler(const ModelFactory& factory);
                 ~ModelHandler();

@@ -54,7 +54,7 @@ void Dashp2p::initStatistics(const std::string& logDir, const bool logTcpState, 
 
 void Dashp2p::setReferenceTime()
 {
-	dash::Utilities::setReferenceTime();
+	dashp2p::Utilities::setReferenceTime();
 }
 
 void Dashp2p::cleanup()

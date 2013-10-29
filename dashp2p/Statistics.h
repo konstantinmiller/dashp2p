@@ -23,10 +23,9 @@
 #ifndef STATISTICS_H_
 #define STATISTICS_H_
 
-
+#include "dashp2p.h"
 #include "Utilities.h"
-#include "HttpRequest.h"
-#include "ContentIdSegment.h"
+#include "ContentId.h"
 #include "MpdWrapper.h"
 #include <list>
 #include <vector>
@@ -37,10 +36,10 @@ using std::vector;
 using std::map;
 using std::list;
 
+namespace dashp2p {
 
 bool operator==(const struct tcp_info& x, const struct tcp_info& y);
 bool operator!=(const struct tcp_info& x, const struct tcp_info& y);
-
 
 class Statistics
 {
@@ -64,9 +63,9 @@ public:
     static int32_t registerTcpConnection();
     static void unregisterTcpConnection(const int32_t tcpConnId);
 
-    static void recordRequestStatistics(const int32_t tcpConnId, HttpRequest* rs);
+    static void recordRequestStatistics(const int32_t tcpConnId, int reqId);
     static int numCompletedRequests(const int32_t tcpConnId);
-    static const HttpRequest* getLastRequest(const int32_t tcpConnId);
+    static int getLastRequest(const int32_t tcpConnId);
     /* Note: Does not consider the last segment. So, the result is only valid if called directly after a request is completed
      * and the request data were passed to the Statistics module. */
     static double getThroughput(const int32_t tcpConnId, double delta, string devName = "");
@@ -74,9 +73,9 @@ public:
     static std::vector<double> getReceivedBytes(const int32_t tcpConnId, std::vector<double> tVec);
     static void outputStatistics();
 
-    static void recordAdaptationDecision(double relTime, dash::Usec beta, double rho, double rhoLast, int r_last, int r_new, dash::Usec Bdelay, bool betaMinIncreasing, int reason);
+    static void recordAdaptationDecision(double relTime, int64_t beta, double rho, double rhoLast, int r_last, int r_new, int64_t Bdelay, bool betaMinIncreasing, int reason);
 
-    static void recordGiveDataToVlc(dash::Usec relTime, dash::Usec usec, int64_t bytes);
+    static void recordGiveDataToVlc(int64_t relTime, int64_t usec, int64_t bytes);
 
     /**
      * Record values to the scalar output file.
@@ -87,20 +86,17 @@ public:
 
     //static void recordTcpState(const char* reason, const struct tcp_info& tcpInfo);
     static void recordTcpState(const int32_t& tcpConnId, const char* reason, const struct tcp_info& tcpInfo);
-    static void recordBytesStored(dash::Usec time, int64_t bytes);
-    static void recordUsecStored(dash::Usec time, dash::Usec usec);
-    static void recordUnderrun(dash::Usec begin, dash::Usec duration);
-    static void recordReconnect(dash::Usec time, enum ReconnectReason reconnectReason);
+    static void recordBytesStored(int64_t time, int64_t bytes);
+    static void recordUsecStored(int64_t time, int64_t usec);
+    static void recordUnderrun(int64_t begin, int64_t duration);
+    static void recordReconnect(int64_t time, enum ReconnectReason reconnectReason);
 
     static void recordSegmentSize(ContentIdSegment segId, int64_t bytes);
-
-    static string tcpState2String(int tcpState);
-    static string tcpCAState2String(int tcpCAState);
 
     static void recordP2PMeasurementToFile(string filePath, int segNr, int repId, int sourceNNumber,
     			double measuredBandwith , int mode, double actualFetchtime);
     static void recordP2PBufferlevelToFile(string filePath,
-    			dash::Usec availableContigIntervalTime , int64_t availableContigIntervalBytes);
+    			int64_t availableContigIntervalTime , int64_t availableContigIntervalBytes);
 
 /* Private methods */
 private:
@@ -120,7 +116,7 @@ private:
     static const MpdWrapper* mpdWrapper;
     static std::string logDir;
     //static std::list<HttpRequest*> rsList;
-    static map<int32_t, list<HttpRequest*> > httpRequests;
+    static map<int32_t, list<int> > httpRequests;
     static int32_t lastTcpConnectionId;
     static bool  logTcpState;
     static map<int32_t, FILE*> filesTcpState;
@@ -144,5 +140,7 @@ private:
     static bool  logRequestStatistics;
     static bool  logRequestDownloadProgress;
 };
+
+}
 
 #endif /* STATISTICS_H_ */

@@ -24,30 +24,33 @@
 # include "config.h"
 #endif
 
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstdio>
 #include <sys/stat.h>
-#include <assert.h>
+#include <cassert>
 #include <string>
 #include <cstdarg>
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 
 #include <vlc_common.h>
 #include <vlc_plugin.h>
 #include <vlc_access.h>
 #include <vlc_playlist.h>
 
-#include "Dashp2pTypes.h"
+#include "dashp2p.h"
+//#include "Dashp2pTypes.h"
 #include "Utilities.h"
 #include "Statistics.h"
 #include "OverlayAdapter.h"
 #include "Control.h"
 #include "XmlAdapter.h"
+#include "TcpConnectionManager.h"
+#include "SourceManager.h"
 
 #define DP2P_dashp2p_cpp
 #include "StatisticsVlc.h"
 #undef DP2P_dashp2p_cpp
+
+using namespace dashp2p;
 
 // TODO: update access_t::info
 
@@ -72,14 +75,14 @@ static ssize_t  read    ( access_t* p_access, uint8_t* buffer, size_t size );
  * Module descriptor
  *****************************************************************************/
 
-/* KMI: just to make Eclipse happy and prevent it from showing errors "cannot resolve MODULE_STRING". */
+/* just to make Eclipse happy and prevent it from showing errors "cannot resolve MODULE_STRING". */
 #ifndef MODULE_STRING
 # define MODULE_STRING "dashp2p"
 #endif
 
 vlc_module_begin()
     set_shortname("dashp2p")
-    set_description("P2P extension to MPEG DASH (compatible with MPEG DASH)")
+    set_description("MPEG-DASH (Dynamic Adaptive Streaming over HTTP)")
     set_capability( "access", 60 )
     set_callbacks( Open, Close )
     set_category( CAT_INPUT )
@@ -87,7 +90,8 @@ vlc_module_begin()
     add_shortcut( "http" )
 
     /* Recording traces */
-    add_string("dashp2p-record-traces", "", "Directory for recording of traces or empty if no traces shall be recorded.", "Directory for recording of traces or empty if no traces shall be recorded.", true)
+    add_string("dashp2p-record-traces", "", "Directory for recording of traces or empty if no traces shall be recorded.",
+    		"Directory for recording of traces or empty if no traces shall be recorded.", false)
     add_string("dashp2p-logfile", "", "Directory for ADDITIONAL debugging to file.", "Directory for ADDITIONAL debugging to file.", true)
     add_string("dashp2p-shm", "", "Shared memory name for communication with VLC.", "Shared memory name for communication with VLC.", true)
     add_bool("dashp2p-log-tcp", false, "Enables extensive logging of TCP internal state.", "Enables extensive logging of TCP internal state.", true)
@@ -99,18 +103,16 @@ vlc_module_begin()
     add_integer("dashp2p-width", 1, "Picture width. -1 (+1) for lowest (highest) available in the MPD.", "Picture width. -1 (+1) for lowest (highest) available in the MPD.", true)
     add_integer("dashp2p-height", 1, "Picture height. -1 (+1) for lowest (highest) available in the MPD.", "Picture height. -1 (+1) for lowest (highest) available in the MPD.", true)
 
-    /* Video/playback related */
-    add_string("dashp2p-start-time", "0:0:0", "Start time <h:m:s>. Immediately if 0:0:0.", "Start time <h:m:s>. Immediately if 0:0:0.", true)
-    add_string("dashp2p-stop-time", "0:0:0", "Stop time <h:m:s>. Play until EOS if 0:0:0.", "Stop time <h:m:s>. Play until EOS if 0:0:0.", true)
-    add_string("dashp2p-start-position", "0:0:0", "Start position <h:m:s>.", "Start position <h:m:s>.", true)
-    add_string("dashp2p-stop-position", "0:0:0", "Stop position <h:m:s>. Play until EOS if 0:0:0.", "Stop position <h:m:s>. Play until EOS if 0:0:0.", true)
-
     /* Adaptation related */
-    add_integer_with_range("dashp2p-adaptation-strategy", 0, 0, 3, "Adaptation strategy", "Adaptation strategy", true)
-    add_string("dashp2p-adaptation-config", "2:10:30:0.75:0.8:0.8:0.8:0.9:5:0", "Configuration of the selected adaptation strategy.", "Configuration of the selected adaptation strategy.", true)
+    add_integer_with_range("dashp2p-adaptation-strategy", 0, 0, 3, "Adaptation strategy", "Adaptation strategy", false)
+    add_string("dashp2p-adaptation-config", "2:10:30:0.75:0.8:0.8:0.8:0.9:5:0", "Configuration of the selected adaptation strategy.",
+    		"Configuration of the selected adaptation strategy.", false)
 
     /* Application layer handover related */
-    add_bool("dashp2p-handover", false, "Experimental: enable application-layer handover.", "Experimental: enable application-layer handover.", true)
+    //add_bool("dashp2p-handover", false, "Experimental: enable application-layer handover.", "Experimental: enable application-layer handover.", true)
+
+    add_string("dashp2p-not-an-actual-option", "", "Compiled on " __DATE__ ", at " __TIME__ ".", "", false)
+
 vlc_module_end ()
 
 /*****************************************************************************
@@ -120,35 +122,31 @@ static int Open( vlc_object_t *p_this )
 {
     // TODO: check if restart of the plugin 100% correct
 
-#if !defined DP2P_VLC || DP2P_VLC == 0
-	msg_Err(p_this, "DP2P_VLC is not set!");
-	abort();
-#endif
+//#if !defined DP2P_VLC || DP2P_VLC == 0
+//	msg_Err(p_this, "DP2P_VLC is not set!");
+//	abort();
+//#endif
 
     access_t *p_access = (access_t*)p_this;
-
-    /* Input parameters */
-    const string mpdUrl                 = p_access->psz_location;
-    const string tracesDir              = var_InheritString  (p_this, "dashp2p-record-traces") ? var_InheritString  (p_this, "dashp2p-record-traces") : "";
-    const string logFile                = var_InheritString  (p_this, "dashp2p-logfile") ? var_InheritString  (p_this, "dashp2p-logfile") : "";
-    const int64_t decoderBufferSize   = var_InheritInteger (p_this, "dashp2p-decoder-buffer-size");
-    const int windowWidth               = var_InheritInteger (p_this, "dashp2p-width"              );
-    const int windowHeight              = var_InheritInteger (p_this, "dashp2p-height"             );
-    const string startTime              = var_InheritString  (p_this, "dashp2p-start-time"         );
-    const string stopTime               = var_InheritString  (p_this, "dashp2p-stop-time"          );
-    const string startPosition          = var_InheritString  (p_this, "dashp2p-start-position"     );
-    const string stopPosition           = var_InheritString  (p_this, "dashp2p-stop-position"      );
-    const int controlType               = var_InheritInteger (p_this, "dashp2p-adaptation-strategy");
-    const string adaptationConfig       = var_InheritString  (p_this, "dashp2p-adaptation-config"  );
-    const bool dashp2pHandover          = var_InheritBool    (p_this, "dashp2p-handover"           );
 
     /* Check if we can proceed. */
     if(strncasecmp(p_access->psz_location + strlen(p_access->psz_location) - 3, "mpd", 3) != 0) {
         msg_Dbg( p_this, "No MPEG DASH MPD file extension detected. Aborting." );
         return VLC_EGENERIC;
     } else {
-        msg_Dbg( p_this, "MPEG DASH MPD file extension detected. Taking over." );
+        msg_Info( p_this, "MPEG-DASH MPD file extension detected. dashp2p plugin takes over. (Compiled on " __DATE__ ", at " __TIME__ ".)" );
     }
+
+    /* Input parameters */
+    const string mpdUrl                 = p_access->psz_location;
+    const string tracesDir              = var_InheritString  (p_this, "dashp2p-record-traces") ? var_InheritString  (p_this, "dashp2p-record-traces") : "";
+    const string logFile                = var_InheritString  (p_this, "dashp2p-logfile") ? var_InheritString  (p_this, "dashp2p-logfile") : "";
+    const int64_t decoderBufferSize     = var_InheritInteger (p_this, "dashp2p-decoder-buffer-size");
+    const int windowWidth               = var_InheritInteger (p_this, "dashp2p-width"              );
+    const int windowHeight              = var_InheritInteger (p_this, "dashp2p-height"             );
+    const int controlType               = var_InheritInteger (p_this, "dashp2p-adaptation-strategy");
+    const string adaptationConfig       = var_InheritString  (p_this, "dashp2p-adaptation-config"  );
+    //const bool dashp2pHandover          = var_InheritBool    (p_this, "dashp2p-handover"           );
 
     /* Initializing the module */
     p_access->p_sys = (access_sys_t*) malloc( sizeof(access_sys_t) );
@@ -161,7 +159,7 @@ static int Open( vlc_object_t *p_this )
     p_access->pf_block = NULL; // = block;
 
     /* Setting reference time to current system time. */
-    dash::Utilities::setReferenceTime();
+    dashp2p::Utilities::setReferenceTime();
 
     /* Initialize the debugging system */
     msg_Dbg(p_this, "verbose=%" PRId64 ", file-logging=%s, log-verbose=%" PRId64, var_InheritInteger(p_this, "verbose"),
@@ -178,7 +176,7 @@ static int Open( vlc_object_t *p_this )
     else
     	DebugAdapter::init(dl, p_this, logFile.c_str());
 
-    DBGMSG("Starting dashp2p at %s with URL: %s.", dash::Utilities::getTimeString().c_str(), p_access->psz_location);
+    DBGMSG("Starting dashp2p at %s with URL: %s.", dashp2p::Utilities::getTimeString().c_str(), p_access->psz_location);
 
     /* Check if we are using the dynamicoverlay plugin */
     string overlayInput;
@@ -198,7 +196,7 @@ static int Open( vlc_object_t *p_this )
     }
 
     /* Initialize XML adapter */
-    XmlAdapter::init(p_this);
+    //XmlAdapter::init(p_this);
 
     /* Initialize the statistics module */
     {
@@ -225,15 +223,9 @@ static int Open( vlc_object_t *p_this )
         OverlayAdapter::init(overlayInput, overlayOutput);
     }
 
-    /* Initializing the Control module */
-    const dash::Usec  _startTime     = (mpdUrl.compare("dummy.mpd") == 0) ? std::numeric_limits<dash::Usec>::max() : dash::Utilities::convertTime2Epoch(startTime);
-    const dash::Usec  _stopTime      = dash::Utilities::convertTime2Epoch(stopTime);
-    const dash::Usec  _startPosition = dash::Utilities::convertTime(startPosition);
-    const dash::Usec  _stopPosition  = dash::Utilities::convertTime(stopPosition);
-    const ControlType _controlType   = (ControlType)controlType;
-    DBGMSG("Will start playback on %s, stop it on %s.", dash::Utilities::getTimeString(_startTime).c_str(), dash::Utilities::getTimeString(_stopTime).c_str());
-    DBGMSG("Will start playback at position %"PRIu64" [us], stop it at %"PRIu64" [us].", _startPosition, _stopPosition);
-    Control::init(mpdUrl, windowWidth, windowHeight, _startPosition, _stopPosition, _startTime, _stopTime, _controlType, adaptationConfig, dashp2pHandover);
+    /* Initializing the Control module, which starts to retrieve data. */
+    const ControlType _controlType = (ControlType)controlType;
+    Control::init(mpdUrl, windowWidth, windowHeight, _controlType, adaptationConfig);
 
     return VLC_SUCCESS;
 }
@@ -252,7 +244,7 @@ static void Close( vlc_object_t *p_this )
     FILE* f = fopen("log_VLC.txt", "r");
     if(f) {
         uint64_t timestamp = 0;
-        dp2p_assert(1 == fscanf(f, "%"SCNu64, &timestamp));
+        dp2p_assert(1 == fscanf(f, "%" SCNu64, &timestamp));
         Statistics::recordScalarU64("VLC_launched", timestamp);
         fclose(f);
         dp2p_assert(0 == remove("log_VLC.txt"));
@@ -263,7 +255,7 @@ static void Close( vlc_object_t *p_this )
     if(f) {
         uint64_t timestamp = 0;
         int ifVisible = -1;
-        dp2p_assert(2 == fscanf(f, "%"SCNu64" %d", &timestamp, &ifVisible));
+        dp2p_assert(2 == fscanf(f, "%" SCNu64 " %d", &timestamp, &ifVisible));
         dp2p_assert(ifVisible == 1);
         Statistics::recordScalarU64("videoVisible", timestamp);
         fclose(f);
@@ -278,10 +270,12 @@ static void Close( vlc_object_t *p_this )
 
     /* Clean-up. */
     Control::cleanUp();
-    XmlAdapter::cleanup();
+    //XmlAdapter::cleanup();
     Statistics::cleanUp();
     if(p_sys->withOverlay)
         OverlayAdapter::cleanup();
+    TcpConnectionManager::cleanup();
+    SourceManager::cleanup();
 
     DBGMSG("The End.");
 
@@ -445,7 +439,7 @@ ssize_t read(access_t* /*p_access*/, uint8_t* buffer, size_t size)
     char* _buffer = (char*)buffer;
     int _size = size;
     int bytesReturned = 0;
-    dash::Usec usecReturned = 0;
+    int64_t usecReturned = 0;
     int ifExpectingMoreData = Control::vlcCb(&_buffer, &_size, &bytesReturned, &usecReturned);
 
     if(bytesReturned == 0 && !ifExpectingMoreData) {
@@ -455,24 +449,24 @@ ssize_t read(access_t* /*p_access*/, uint8_t* buffer, size_t size)
         /* Logging */
         if(_state == READ_OK) {
             _state = READ_UNDERRUN;
-            Statistics::recordGiveDataToVlc(dash::Utilities::getTime(), 0.0, 0.0);
+            Statistics::recordGiveDataToVlc(dashp2p::Utilities::getTime(), 0.0, 0.0);
         }
         DBGMSG("Returning 0 bytes but NO EOF.");
         return -1;
     }
 
     if(_state == READ_INIT) {
-        Statistics::recordScalarDouble("startGiveDataToVLC", dash::Utilities::now());
+        Statistics::recordScalarDouble("startGiveDataToVLC", dashp2p::Utilities::now());
     }
 
     _state = READ_OK;
 
     /* Dump statistics */
-    static dash::Usec usecConsumed = 0;
+    static int64_t usecConsumed = 0;
     static uint64_t byteConsumed = 0;
     usecConsumed += usecReturned;
     byteConsumed += bytesReturned;
-    Statistics::recordGiveDataToVlc(dash::Utilities::getTime(), usecConsumed / 1e6, (double)byteConsumed);
+    Statistics::recordGiveDataToVlc(dashp2p::Utilities::getTime(), usecConsumed / 1e6, (double)byteConsumed);
 
     /* Dump segment data */
 #if 0

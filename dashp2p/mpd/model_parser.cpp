@@ -29,7 +29,7 @@
 
 #include "util/conversions.h"
 
-namespace dash {
+namespace dashp2p {
     namespace mpd {
         /********************************************
          * Internal Class Definitions               *
@@ -322,7 +322,7 @@ namespace dash {
 
         static Duration* convertDuration(const std::string& value) {
             try {
-                long duration= dash::util::durationStringToMillis(value);
+                long duration= dashp2p::util::durationStringToMillis(value);
 // TODO: remove debug message
 //std::cout << __FILE__ << '(' << __LINE__ << ") CONVERTED DURATION '" << value << "' to '" << duration << "'" << std::endl;
                 return new Duration(duration);
@@ -335,7 +335,7 @@ std::cout << __FILE__ << '(' << __LINE__ << ") ERROR DURING CONVERSION " << e.wh
 
         static double* convertDouble(const std::string& value) {
             try {
-                double d= dash::util::stringToDouble(value);
+                double d= dashp2p::util::stringToDouble(value);
 // TODO: remove debug message
 std::cout << __FILE__ << '(' << __LINE__ << ") CONVERTED DOUBLE '" << value << "' to '" << d << "'" << std::endl;
                 return new double(d);

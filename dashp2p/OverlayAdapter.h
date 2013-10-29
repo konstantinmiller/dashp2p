@@ -30,6 +30,7 @@
 #include <string>
 using std::string;
 
+namespace dashp2p {
 
 class OverlayAdapter
 {
@@ -64,6 +65,8 @@ private:
     static std::vector<char*>* msgBuf1;
     static std::vector<char*>* msgBuf2;
 };
+
+}
 
 #endif /* OVERLAYADAPTER_H_ */
 

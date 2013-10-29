@@ -24,21 +24,25 @@
 #include "Utilities.h"
 #include "DebugAdapter.h"
 #include "Control.h"
-#include <assert.h>
-#include <stdio.h>
+#include "TcpConnectionManager.h"
+#include "SourceManager.h"
+
+#include <cassert>
+#include <cstdio>
 #include <limits>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <cmath>
-#include <inttypes.h>
+//#include <cinttypes>
 #include <fstream>
 #include <iostream>
 
+namespace dashp2p {
 
 const MpdWrapper* Statistics::mpdWrapper = NULL;
 std::string Statistics::logDir;
 //std::list<HttpRequest*> Statistics::rsList;
-map<int32_t, list<HttpRequest*> > Statistics::httpRequests;
+map<int32_t, list<int> > Statistics::httpRequests;
 int32_t Statistics::lastTcpConnectionId = -1;
 bool  Statistics::logTcpState = false;
 map<int32_t, FILE*> Statistics::filesTcpState;
@@ -118,18 +122,7 @@ void Statistics::cleanUp()
 
 	logDir.erase();
 
-	while(!httpRequests.empty())
-	{
-		list<HttpRequest*>& reqList = httpRequests.begin()->second;
-
-		while(!reqList.empty()) {
-			HttpRequest* rs = reqList.back();
-			delete rs;
-			reqList.pop_back();
-		}
-
-		httpRequests.erase(httpRequests.begin());
-	}
+	httpRequests.clear();
 
 	//Statistics::lastTcpConnectionId = -1;
 	Statistics::logTcpState = false;
@@ -216,23 +209,22 @@ void Statistics::unregisterTcpConnection(const int32_t tcpConnId)
 	}
 }
 
-void Statistics::recordRequestStatistics(const int32_t tcpConnId, HttpRequest* rs)
+// fixme: change the usage of this functions. is should not be necessary to call it explicitely. all dat amust go statistics immediately.
+void Statistics::recordRequestStatistics(const int32_t tcpConnId, int reqId)
 {
 	if(0 == httpRequests.count(tcpConnId)) {
-		httpRequests.insert(pair<int32_t, list<HttpRequest*> >(tcpConnId, list<HttpRequest*>()));
+		httpRequests.insert(pair<int32_t, list<int> >(tcpConnId, list<int>()));
 	}
 
-    httpRequests.at(tcpConnId).push_back(rs);
+    httpRequests.at(tcpConnId).push_back(reqId);
 
-#if DP2P_VLC == 1
-    if(rs->getContentId().getType() == ContentType_Segment)
+    if(HttpRequestManager::getContentId(reqId).getType() == ContentType_Segment)
         Control::displayThroughputOverlay(
-                dynamic_cast<const ContentIdSegment&>(rs->getContentId()).segmentIndex(),
-                rs->tsLastByte,
+                dynamic_cast<const ContentIdSegment&>(HttpRequestManager::getContentId(reqId)).segmentIndex(),
+                HttpRequestManager::getTsLastByte(reqId),
                 Statistics::getThroughputLastRequest(tcpConnId));
     else
-        Control::displayThroughputOverlay(-1, rs->tsLastByte, Statistics::getThroughputLastRequest(tcpConnId));
-#endif
+        Control::displayThroughputOverlay(-1, HttpRequestManager::getTsLastByte(reqId), Statistics::getThroughputLastRequest(tcpConnId));
 }
 
 int Statistics::numCompletedRequests(const int32_t tcpConnId)
@@ -241,7 +233,7 @@ int Statistics::numCompletedRequests(const int32_t tcpConnId)
 	return httpRequests.at(tcpConnId).size();
 }
 
-const HttpRequest* Statistics::getLastRequest(const int32_t tcpConnId)
+int Statistics::getLastRequest(const int32_t tcpConnId)
 {
 	dp2p_assert(0 < httpRequests.count(tcpConnId) && !httpRequests.at(tcpConnId).empty());
     return httpRequests.at(tcpConnId).back();
@@ -250,10 +242,10 @@ const HttpRequest* Statistics::getLastRequest(const int32_t tcpConnId)
 // TODO: validate throughput calculations (no bugs noticed but just to be sure)
 double Statistics::getThroughput(const int32_t tcpConnId, double delta, string devName)
 {
-    const double now = dash::Utilities::now();
+    const double now = dashp2p::Utilities::now();
 
     dp2p_assert(0 < httpRequests.count(tcpConnId));
-    list<HttpRequest*>& rsList = httpRequests.at(tcpConnId);
+    list<int>& rsList = httpRequests.at(tcpConnId);
     dp2p_assert(!rsList.empty());
 
     if(delta > now) {
@@ -263,15 +255,15 @@ double Statistics::getThroughput(const int32_t tcpConnId, double delta, string d
 
     double seconds = 0;
     double bits = 0;
-    std::list<HttpRequest*>::const_iterator it = --rsList.end();
+    std::list<int>::const_iterator it = --rsList.end();
     while(true)
     {
-        const HttpRequest* rs = *it;
-        if(devName.empty() || rs->devName.compare(devName) == 0)
+        const int reqId = *it;
+        if(devName.empty() || TcpConnectionManager::get(tcpConnId).ifData.name.compare(devName) == 0)
         {
-            const double startTime = rs->tsSent;
-            const double complTime = rs->tsLastByte;
-            const double bytes = rs->hdr.contentLength;
+            const double startTime = HttpRequestManager::getTsSent(reqId);
+            const double complTime = HttpRequestManager::getTsLastByte(reqId);
+            const double bytes = HttpRequestManager::getContentLength(reqId);
 
             if(complTime <= now - delta) {
                 break;
@@ -309,11 +301,11 @@ double Statistics::getThroughput(const int32_t tcpConnId, double delta, string d
 double Statistics::getThroughputLastRequest(const int32_t tcpConnId)
 {
     dp2p_assert(0 < httpRequests.count(tcpConnId));
-    list<HttpRequest*>& rsList = httpRequests.at(tcpConnId);
+    list<int>& rsList = httpRequests.at(tcpConnId);
     dp2p_assert(!rsList.empty());
 
-    const HttpRequest* rs = rsList.back();
-    return (8.0 * rs->hdr.contentLength) / (rs->tsLastByte - rs->tsSent);
+    const int reqId = rsList.back();
+    return (8.0 * HttpRequestManager::getContentLength(reqId)) / (HttpRequestManager::getTsLastByte(reqId) - HttpRequestManager::getTsSent(reqId));
 }
 
 // TODO: assumes that requests are received in chronological order. fails if this is not the case!
@@ -323,7 +315,7 @@ std::vector<double> Statistics::getReceivedBytes(const int32_t tcpConnId, std::v
     dp2p_assert(tVec.size() > 1);
 
     dp2p_assert(0 < httpRequests.count(tcpConnId));
-    list<HttpRequest*>& rsList = httpRequests.at(tcpConnId);
+    list<int>& rsList = httpRequests.at(tcpConnId);
     dp2p_assert(!rsList.empty());
 
     /* Prepare the return value */
@@ -336,20 +328,20 @@ std::vector<double> Statistics::getReceivedBytes(const int32_t tcpConnId, std::v
     bool done = false;
 
     /* Iterate over requests, beginning with the most recent */
-    std::list<HttpRequest*>::const_iterator it = rsList.end(); --it;
+    std::list<int>::const_iterator it = rsList.end(); --it;
     while(!done)
     {
         /* Get the most recent stored HTTP request */
-        const HttpRequest* req = *it;
+        const int reqId = *it;
 
         /* Get the download process of the request */
-        const DownloadProcess* dp = req->downloadProcess;
+        const DownloadProcess& dp = HttpRequestManager::getDownloadProcess(reqId);
 
         //printf("Request %u has %u vectors in the dp.\n", req->reqId, dp->size());
         //printf("tsSent=%.6f, tsFirstByte=%.6f, tsLastByte=%.6f\n", req->tsSent, req->tsFirstByte, req->tsLastByte);
 
         /* Iterate over the elements of the download process, beginning with the most recent */
-        DownloadProcess::const_iterator dpIt = dp->end(); --dpIt;
+        DownloadProcess::const_iterator dpIt = dp.end(); --dpIt;
         while(!done)
         {
             /* Get the element of the download process */
@@ -418,7 +410,7 @@ std::vector<double> Statistics::getReceivedBytes(const int32_t tcpConnId, std::v
                 b2 = b1;
             }
 
-            if(dpIt == dp->begin() || done) {
+            if(dpIt == dp.begin() || done) {
                 break;
             } else {
                 --dpIt;
@@ -444,17 +436,17 @@ void Statistics::outputStatistics()
     if(logDir.empty() || httpRequests.empty())
     	return;
 
-    for(map<int32_t, list<HttpRequest*> >::const_iterator it = httpRequests.begin(); it != httpRequests.end(); ++it)
+    for(map<int32_t, list<int> >::const_iterator it = httpRequests.begin(); it != httpRequests.end(); ++it)
     {
     	const int32_t tcpConnId = it->first;
-    	const list<HttpRequest*>& reqList = it->second;
+    	const list<int>& reqList = it->second;
 
     	if(reqList.empty())
     		continue;
 
     	/* output seconds between downloads */
 #if 0
-    	sprintf(logPath, "%s/log_%020"PRId64"_TCP%05"PRId32"_sec_between_downloads.txt", logDir.c_str(), dash::Utilities::getReferenceTime(), tcpConnId);
+    	sprintf(logPath, "%s/log_%020"PRId64"_TCP%05"PRId32"_sec_between_downloads.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime(), tcpConnId);
     	FILE* fileSecBetweenDownloads = fopen(logPath, "wx");
     	dp2p_assert(fileSecBetweenDownloads);
     	std::list<HttpRequest*>::const_iterator it1 = reqList.begin();
@@ -469,7 +461,7 @@ void Statistics::outputStatistics()
 
     	/* output download progress */
 #if 0
-    	sprintf(logPath, "%s/log_%020"PRId64"_TCP%05"PRId32"_bytes_downloaded.txt", logDir.c_str(), dash::Utilities::getReferenceTime(), tcpConnId);
+    	sprintf(logPath, "%s/log_%020"PRId64"_TCP%05"PRId32"_bytes_downloaded.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime(), tcpConnId);
     	FILE* fileDownloadProgress = fopen(logPath, "wx");
     	dp2p_assert(fileDownloadProgress);
     	int64_t byteCounter = 0;
@@ -490,7 +482,7 @@ void Statistics::outputStatistics()
     	/* output request statistics */
     	if(logRequestStatistics)
     	{
-    		sprintf(logPath, "%s/log_%020"PRId64"_TCP%05"PRId32"_request_statistics.txt", logDir.c_str(), dash::Utilities::getReferenceTime(), tcpConnId);
+    		sprintf(logPath, "%s/log_%020" PRId64 "_TCP%05" PRId32 "_request_statistics.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime(), tcpConnId);
     		FILE* fileRequestStatistics = fopen(logPath, "wx");
     		dp2p_assert(fileRequestStatistics);
 
@@ -507,23 +499,23 @@ void Statistics::outputStatistics()
     		fprintf(fileRequestStatistics, " sentPipelined.double");
     		fprintf(fileRequestStatistics, " segmentDuration.double\n");
 
-    		for(std::list<HttpRequest*>::const_iterator it = reqList.begin(); it != reqList.end(); ++it)
+    		for(std::list<int>::const_iterator it = reqList.begin(); it != reqList.end(); ++it)
     		{
-    			const HttpRequest& rs = **it;
+    			const int reqId = *it;
 
-    			fprintf(fileRequestStatistics, " %u", rs.reqId);
-    			fprintf(fileRequestStatistics, " %s", rs.getContentId().toString().c_str());
-    			fprintf(fileRequestStatistics, " %s", rs.hostName.c_str());
-    			fprintf(fileRequestStatistics, " %s", rs.file.c_str());
-    			fprintf(fileRequestStatistics, " %"PRIu64, (dash::Usec)(1e6 * rs.tsSent) + dash::Utilities::getReferenceTime());
-    			fprintf(fileRequestStatistics, " %"PRIu64, (dash::Usec)(1e6 * rs.tsFirstByte) + dash::Utilities::getReferenceTime());
-    			fprintf(fileRequestStatistics, " %"PRIu64, (dash::Usec)(1e6 * rs.tsLastByte) + dash::Utilities::getReferenceTime());
-    			fprintf(fileRequestStatistics, " %"PRId64, rs.hdr.contentLength);
-    			fprintf(fileRequestStatistics, " %d", rs.hdr.keepAliveMax);
-    			fprintf(fileRequestStatistics, " %u", rs.sentPipelined ? 1 : 0);
+    			fprintf(fileRequestStatistics, " %u", reqId);
+    			fprintf(fileRequestStatistics, " %s", HttpRequestManager::getContentId(reqId).toString().c_str());
+    			fprintf(fileRequestStatistics, " %s", SourceManager::get(TcpConnectionManager::get(tcpConnId).srcId).hostName.c_str());
+    			fprintf(fileRequestStatistics, " %s", HttpRequestManager::getFileName(reqId).c_str());
+    			fprintf(fileRequestStatistics, " %" PRIu64, (int64_t)(1e6 * HttpRequestManager::getTsSent(reqId)) + dashp2p::Utilities::getReferenceTime());
+    			fprintf(fileRequestStatistics, " %" PRIu64, (int64_t)(1e6 * HttpRequestManager::getTsFirstByte(reqId)) + dashp2p::Utilities::getReferenceTime());
+    			fprintf(fileRequestStatistics, " %" PRIu64, (int64_t)(1e6 * HttpRequestManager::getTsLastByte(reqId)) + dashp2p::Utilities::getReferenceTime());
+    			fprintf(fileRequestStatistics, " %" PRId64, HttpRequestManager::getContentLength(reqId));
+    			fprintf(fileRequestStatistics, " %d", HttpRequestManager::getHdr(reqId).keepAliveMax);
+    			fprintf(fileRequestStatistics, " %u", HttpRequestManager::isSentPipelined(reqId) ? 1 : 0);
 
-    			if(mpdWrapper && rs.getContentType() == ContentType_Segment)
-                    fprintf(fileRequestStatistics, " %.6f",  mpdWrapper->getSegmentDuration(dynamic_cast<const ContentIdSegment&>(rs.getContentId())) / 1e6);
+    			if(mpdWrapper && HttpRequestManager::getContentType(reqId) == ContentType_Segment)
+                    fprintf(fileRequestStatistics, " %.6f",  mpdWrapper->getSegmentDuration(dynamic_cast<const ContentIdSegment&>(HttpRequestManager::getContentId(reqId))) / 1e6);
                 else
                     fprintf(fileRequestStatistics, " 0");
 
@@ -534,9 +526,9 @@ void Statistics::outputStatistics()
     			//fprintf(fileRequestStatistics, "        <contentId value=\"%s\" type=\"string\"></contentId>\n",                  rs.getContentId().toString().c_str());
     			//fprintf(fileRequestStatistics, "        <hostName value=\"%s\" type=\"string\"></hostName>\n",                    rs.hostName.c_str());
     			//fprintf(fileRequestStatistics, "        <path value=\"%s\" type=\"string\"></path>\n",                            rs.file.c_str());
-    			//fprintf(fileRequestStatistics, "        <tsSentOut value=\"%"PRIu64"\" type=\"u64\"></tsSentOut>\n",              (dash::Usec)(1e6 * rs.tsSent) + dash::Utilities::getReferenceTime());
-    			//fprintf(fileRequestStatistics, "        <tsFirstData value=\"%"PRIu64"\" type=\"u64\"></tsFirstData>\n",          (dash::Usec)(1e6 * rs.tsFirstByte) + dash::Utilities::getReferenceTime());
-    			//fprintf(fileRequestStatistics, "        <tsLastData value=\"%"PRIu64"\" type=\"double\"></tsLastData>\n",         (dash::Usec)(1e6 * rs.tsLastByte) + dash::Utilities::getReferenceTime());
+    			//fprintf(fileRequestStatistics, "        <tsSentOut value=\"%"PRIu64"\" type=\"u64\"></tsSentOut>\n",              (int64_t)(1e6 * rs.tsSent) + dashp2p::Utilities::getReferenceTime());
+    			//fprintf(fileRequestStatistics, "        <tsFirstData value=\"%"PRIu64"\" type=\"u64\"></tsFirstData>\n",          (int64_t)(1e6 * rs.tsFirstByte) + dashp2p::Utilities::getReferenceTime());
+    			//fprintf(fileRequestStatistics, "        <tsLastData value=\"%"PRIu64"\" type=\"double\"></tsLastData>\n",         (int64_t)(1e6 * rs.tsLastByte) + dashp2p::Utilities::getReferenceTime());
     			//fprintf(fileRequestStatistics, "        <pldSize value=\"%"PRId64"\" type=\"double\"></pldSize>\n",               rs.hdr.contentLength);
     			//fprintf(fileRequestStatistics, "        <maxRemainingReqs value=\"%d\" type=\"int\"></maxRemainingReqs>\n",       rs.hdr.keepAliveMax);
     			//fprintf(fileRequestStatistics, "        <sentPipelined value=\"%u\" type=\"double\"></sentPipelined>\n",          rs.sentPipelined ? 1 : 0);
@@ -552,7 +544,7 @@ void Statistics::outputStatistics()
     	/* download processes of the requests */
     	if(logRequestDownloadProgress)
     	{
-    		sprintf(logPath, "%s/log_%020"PRId64"_TCP%05"PRId32"_request_statistics_download_processes", logDir.c_str(), dash::Utilities::getReferenceTime(), tcpConnId);
+    		sprintf(logPath, "%s/log_%020" PRId64 "_TCP%05" PRId32 "_request_statistics_download_processes", logDir.c_str(), dashp2p::Utilities::getReferenceTime(), tcpConnId);
     		{
     		    int ret = mkdir(logPath, 0700);
     		    if(ret != 0) {
@@ -561,17 +553,17 @@ void Statistics::outputStatistics()
     		        dp2p_assert(0);
     		    }
     		}
-    		for(std::list<HttpRequest*>::const_iterator it = reqList.begin(); it != reqList.end(); ++it)
+    		for(std::list<int>::const_iterator it = reqList.begin(); it != reqList.end(); ++it)
     		{
-    			const HttpRequest& rs = **it;
-    			sprintf(logPath, "%s/log_%020"PRId64"_TCP%05"PRId32"_request_statistics_download_processes/reqId_%06u.txt", logDir.c_str(), dash::Utilities::getReferenceTime(), tcpConnId, rs.reqId);
+    			const int reqId = *it;
+    			sprintf(logPath, "%s/log_%020" PRId64 "_TCP%05" PRId32 "_request_statistics_download_processes/reqId_%06u.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime(), tcpConnId, reqId);
     			FILE* dpFile = fopen(logPath, "wx");
     			dp2p_assert(dpFile);
-    			for(DownloadProcess::const_iterator j = rs.downloadProcess->begin(); j != rs.downloadProcess->end(); ++j)
+    			for(DownloadProcess::const_iterator j = HttpRequestManager::getDownloadProcess(reqId).begin(); j != HttpRequestManager::getDownloadProcess(reqId).end(); ++j)
     			{
     				const vector<DownloadProcessElement>& vec = *j;
     				for(unsigned k = 0; k < vec.size(); ++k) {
-    					fprintf(dpFile, "%"PRId64" %d\n", vec.at(k).ts_us, vec.at(k).byte);
+    					fprintf(dpFile, "%" PRId64 " %d\n", vec.at(k).ts_us, vec.at(k).byte);
     				}
     			}
     			dp2p_assert(0 == fclose(dpFile));
@@ -581,13 +573,13 @@ void Statistics::outputStatistics()
     	// TODO: the code below does not work if requests are issued in parallel. the function getReceivedBytes must be adapted (see comment above this latter function)
 #if 0
     	/* discretized download process */
-    	//printf("oldest stored value: %f, now: %f\n", rsList.front()->tsFirstByte, dash::Utilities::now());
+    	//printf("oldest stored value: %f, now: %f\n", rsList.front()->tsFirstByte, dashp2p::Utilities::now());
     	const double firstByteTimeFloor = std::floor(rsList.front()->tsFirstByte);
-    	std::vector<double> tVec((unsigned)(std::ceil(dash::Utilities::now()) - firstByteTimeFloor));
+    	std::vector<double> tVec((unsigned)(std::ceil(dashp2p::Utilities::now()) - firstByteTimeFloor));
     	for(unsigned i = 0; i < tVec.size(); ++i)
     		tVec.at(i) = firstByteTimeFloor + i;
     	std::vector<double> discDp = getReceivedBytes(tVec);
-    	sprintf(logPath, "%s/log_%020"PRId64"_download_process_discr.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+    	sprintf(logPath, "%s/log_%020"PRId64"_download_process_discr.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
     	FILE* f = fopen(logPath, "wx");
     	dp2p_assert(f);
     	for(unsigned i = 0; i < discDp.size(); ++i)
@@ -598,7 +590,7 @@ void Statistics::outputStatistics()
     }
 }
 
-void Statistics::recordAdaptationDecision(double relTime, dash::Usec beta, double rho, double rhoLast, int r_last, int r_new, dash::Usec Bdelay, bool betaMinIncreasing, int reason)
+void Statistics::recordAdaptationDecision(double relTime, int64_t beta, double rho, double rhoLast, int r_last, int r_new, int64_t Bdelay, bool betaMinIncreasing, int reason)
 {
     if(logDir.empty() || !logAdaptationDecision)
         return;
@@ -613,7 +605,7 @@ void Statistics::recordAdaptationDecision(double relTime, dash::Usec beta, doubl
             relTime, r_last, r_new, std::min<double>(9999.0, Bdelay / 1e6), reason, beta / 1e6, rho / 1e6, rhoLast / 1e6, betaMinIncreasing ? "incr" : "decr");
 }
 
-void Statistics::recordGiveDataToVlc(dash::Usec relTime, dash::Usec usec, int64_t bytes)
+void Statistics::recordGiveDataToVlc(int64_t relTime, int64_t usec, int64_t bytes)
 {
     if(logDir.empty() || !logGiveDataToVlc)
         return;
@@ -654,7 +646,7 @@ void Statistics::recordScalarU64(const char* name, uint64_t value)
     if(!fileScalarValues)
         	prepareFileScalarValues();
 
-    fprintf(fileScalarValues, "    <%s value=\"%"PRIu64"\" type=\"u64\"></%s>\n", name, value, name);
+    fprintf(fileScalarValues, "    <%s value=\"%" PRIu64 "\" type=\"u64\"></%s>\n", name, value, name);
 }
 
 #if 0
@@ -673,7 +665,7 @@ void Statistics::recordTcpState(const char* reason, const struct tcp_info& tcpIn
     if(tcpInfo != last_tcpInfo)
     {
         /*fprintf(fileTcpState, "% 17.6f | %15s | %17s | %17s | %11u | %6u | %7u | %7u | %10u | %10u | %7u | %7u | %7u | %7u | %7u | %6u | %6u | %7u | %7u | %14u | %13u | %14u | %13u | %6u | %12u | %7u | %6u | %12u | %8u | %6u | %10u | %7u | %9u | %13u |\n",
-                dash::Utilities::getTime() / 1e6, reason,
+                dashp2p::Utilities::getTime() / 1e6, reason,
                 tcpState2String(tcpInfo.tcpi_state), tcpCAState2String(tcpInfo.tcpi_ca_state),
                 tcpInfo.tcpi_retransmits, tcpInfo.tcpi_probes, tcpInfo.tcpi_backoff, tcpInfo.tcpi_options,
                 tcpInfo.tcpi_snd_wscale, tcpInfo.tcpi_rcv_wscale,
@@ -684,7 +676,7 @@ void Statistics::recordTcpState(const char* reason, const struct tcp_info& tcpIn
                 tcpInfo.tcpi_snd_cwnd, tcpInfo.tcpi_advmss, tcpInfo.tcpi_reordering, tcpInfo.tcpi_rcv_rtt,
                 tcpInfo.tcpi_rcv_space, tcpInfo.tcpi_total_retrans);*/
         fprintf(filesTcpState.at(0), "tcpState.time(%5u) = % 17.6f;     tcpState.reason{%5u} = '%15s';     tcpState.TCP_STATE{%5u} = '%17s';     tcpState.TCP_CA_STATE{%5u} = '%17s';     tcpState.retransmits(%5u) = %10u;     tcpState.probes(%5u) = %6u;     tcpState.backoff(%5u) = %7u;     tcpState.options(%5u) = %7u;     tcpState.snd_wscale(%5u) = %10u;     tcpState.rcv_wscale(%5u) = %10u;     tcpState.rto(%5u) = % 9.6f;     tcpState.ato(%5u) = %7u;     tcpState.snd_mss(%5u) = %7u;     tcpState.rcv_mss(%5u) = %7u;     tcpState.unacked(%5u) = %7u;     tcpState.sacked(%5u) = %6u;     tcpState.lost(%5u) = %6u;     tcpState.retrans(%5u) = %7u;     tcpState.fackets(%5u) = %7u;     tcpState.last_data_sent(%5u) = %14u;     tcpState.last_ack_sent(%5u) = %13u;     tcpState.last_data_recv(%5u) = %14u;     tcpState.last_ack_recv(%5u) = %13u;     tcpState.pmtu(%5u) = %6u;     tcpState.rcv_ssthresh(%5u) = %12u;     tcpState.rtt(%5u) = % 9.6f;     tcpState.rttvar(%5u) = % 9.6f;     tcpState.snd_ssthresh(%5u) = %12u;     tcpState.snd_cwnd(%5u) = %8u;     tcpState.advmss(%5u) = %6u;     tcpState.reordering(%5u) = %10u;     tcpState.rcv_rtt(%5u) = %7u;     tcpState.rcv_space(%5u) = %9u;     tcpState.total_retrans(%5u) = %13u;\n",
-                cnt, dash::Utilities::getTime() / 1e6,
+                cnt, dashp2p::Utilities::getTime() / 1e6,
                 cnt, reason,
                 cnt, tcpState2String(tcpInfo.tcpi_state).c_str(),
                 cnt, tcpCAState2String(tcpInfo.tcpi_ca_state).c_str(),
@@ -737,11 +729,11 @@ void Statistics::recordTcpState(const int32_t& tcpConnId, const char* reason, co
 	if(tcpInfo != lastTcpInfo[tcpConnId])
 	{
 		fprintf(filesTcpState.at(tcpConnId),
-				"%17"PRId64" %17s %19s %19s %13u %8u %9u %9u %12u %12u % 11.6f %9u %9u %9u %9u %8u %8u %9u %9u %16u %15u %16u %15u %8u %14u % 11.6f % 10.6f %14u %10u %8u %12u %9u %11u %15u\n",
-				dash::Utilities::getAbsTime(),
+				"%17" PRId64 " %17s %19s %19s %13u %8u %9u %9u %12u %12u % 11.6f %9u %9u %9u %9u %8u %8u %9u %9u %16u %15u %16u %15u %8u %14u % 11.6f % 10.6f %14u %10u %8u %12u %9u %11u %15u\n",
+				dashp2p::Utilities::getAbsTime(),
 				reason,
-				tcpState2String(tcpInfo.tcpi_state).c_str(),
-				tcpCAState2String(tcpInfo.tcpi_ca_state).c_str(),
+				TcpConnectionManager::tcpState2String(tcpInfo.tcpi_state).c_str(),
+				TcpConnectionManager::tcpCAState2String(tcpInfo.tcpi_ca_state).c_str(),
 				tcpInfo.tcpi_retransmits,
 				tcpInfo.tcpi_probes,
 				tcpInfo.tcpi_backoff,
@@ -776,7 +768,7 @@ void Statistics::recordTcpState(const int32_t& tcpConnId, const char* reason, co
 	}
 }
 
-void Statistics::recordBytesStored(dash::Usec time, int64_t bytes)
+void Statistics::recordBytesStored(int64_t time, int64_t bytes)
 {
     if(logDir.empty() || !logBytesStored)
         return;
@@ -784,10 +776,10 @@ void Statistics::recordBytesStored(dash::Usec time, int64_t bytes)
     if(!fileBytesStored)
     	prepareFileBytesStored();
 
-    fprintf(fileBytesStored, "% 18"PRId64" % 10"PRId64"\n", time, bytes);
+    fprintf(fileBytesStored, "% 18" PRId64 " % 10" PRId64 "\n", time, bytes);
 }
 
-void Statistics::recordUsecStored(dash::Usec time, dash::Usec usec)
+void Statistics::recordUsecStored(int64_t time, int64_t usec)
 {
     if(logDir.empty() || !logSecStored)
         return;
@@ -795,10 +787,10 @@ void Statistics::recordUsecStored(dash::Usec time, dash::Usec usec)
     if(!fileSecStored)
     	prepareFileSecStored();
 
-    fprintf(fileSecStored, "% 18"PRId64" % 10"PRId64"\n", time, usec);
+    fprintf(fileSecStored, "% 18" PRId64 " % 10" PRId64 "\n", time, usec);
 }
 
-void Statistics::recordUnderrun(dash::Usec begin, dash::Usec duration)
+void Statistics::recordUnderrun(int64_t begin, int64_t duration)
 {
     if(logDir.empty() || !logUnderruns)
         return;
@@ -809,7 +801,7 @@ void Statistics::recordUnderrun(dash::Usec begin, dash::Usec duration)
     fprintf(fileUnderruns, "% 17.6f % 17.6f\n", begin / 1e6, duration / 1e6);
 }
 
-void Statistics::recordReconnect(dash::Usec time, enum ReconnectReason reconnectReason)
+void Statistics::recordReconnect(int64_t time, enum ReconnectReason reconnectReason)
 {
 	if(logDir.empty() || !logReconnects)
 		return;
@@ -828,43 +820,7 @@ void Statistics::recordSegmentSize(ContentIdSegment segId, int64_t bytes)
     if(!fileSegmentSizes)
     	prepareFileSegmentSizes();
 
-    fprintf(fileSegmentSizes, "%d %d %"PRId64"\n", segId.bitRate(), segId.segmentIndex(), bytes);
-}
-
-string Statistics::tcpState2String(int tcpState)
-{
-    switch(tcpState)
-    {
-    case TCP_ESTABLISHED: return "TCP_ESTABLISHED";
-    case TCP_SYN_SENT:    return "TCP_SYN_SENT";
-    case TCP_SYN_RECV:    return "TCP_SYN_RECV";
-    case TCP_FIN_WAIT1:   return "TCP_FIN_WAIT1";
-    case TCP_FIN_WAIT2:   return "TCP_FIN_WAIT2";
-    case TCP_TIME_WAIT:   return "TCP_TIME_WAIT";
-    case TCP_CLOSE:       return "TCP_CLOSE";
-    case TCP_CLOSE_WAIT:  return "TCP_CLOSE_WAIT";
-    case TCP_LAST_ACK:    return "TCP_LAST_ACK";
-    case TCP_LISTEN:      return "TCP_LISTEN";
-    case TCP_CLOSING:     return "TCP_CLOSING";
-    default:
-        dp2p_assert(0);
-        return string();
-    }
-}
-
-string Statistics::tcpCAState2String(int tcpCAState)
-{
-    switch(tcpCAState)
-    {
-    case TCP_CA_Open:     return "TCP_CA_Open";
-    case TCP_CA_Disorder: return "TCP_CA_Disorder";
-    case TCP_CA_CWR:      return "TCP_CA_CWR";
-    case TCP_CA_Recovery: return "TCP_CA_Recovery";
-    case TCP_CA_Loss:     return "TCP_CA_Loss";
-    default:
-        dp2p_assert(0);
-        return string();
-    }
+    fprintf(fileSegmentSizes, "%d %d %" PRId64 "\n", segId.bitRate(), segId.segmentIndex(), bytes);
 }
 
 void Statistics::recordP2PMeasurementToFile(string filePath, int segNr, int repId,
@@ -872,20 +828,20 @@ void Statistics::recordP2PMeasurementToFile(string filePath, int segNr, int repI
 {
 	std::ofstream myfile;
 	char fileName[1024];
-	sprintf(fileName, "log_%020"PRId64"_P2PMeasurement.txt", dash::Utilities::getReferenceTime());
+	sprintf(fileName, "log_%020" PRId64 "_P2PMeasurement.txt", dashp2p::Utilities::getReferenceTime());
 	myfile.open ((filePath + fileName).c_str(), std::fstream::in | std::fstream::out | std::fstream::app);
-	myfile << dash::Utilities::getReferenceTime() << " " << dash::Utilities::now() << " " << (int) segNr << " " << repId << " " << sourceNNumber << " " <<
+	myfile << dashp2p::Utilities::getReferenceTime() << " " << dashp2p::Utilities::now() << " " << (int) segNr << " " << repId << " " << sourceNNumber << " " <<
 			measuredBandwith << " " << mode  << " " <<  actualFetchtime  << "\n";
 	myfile.close();
 }
 
-void Statistics::recordP2PBufferlevelToFile(string filePath, dash::Usec availableContigIntervalTime , int64_t availableContigIntervalBytes)
+void Statistics::recordP2PBufferlevelToFile(string filePath, int64_t availableContigIntervalTime , int64_t availableContigIntervalBytes)
 {
 	std::ofstream myfile;
 	char fileName[1024];
-	sprintf(fileName, "log_%020"PRId64"_P2PMeasurementBufferlevel.txt", dash::Utilities::getReferenceTime());
+	sprintf(fileName, "log_%020" PRId64 "_P2PMeasurementBufferlevel.txt", dashp2p::Utilities::getReferenceTime());
 	myfile.open ((filePath + fileName).c_str(), std::fstream::in | std::fstream::out | std::fstream::app);
-	myfile << dash::Utilities::getReferenceTime() << " " << dash::Utilities::now() << " " << availableContigIntervalBytes << " " << availableContigIntervalTime << "\n";
+	myfile << dashp2p::Utilities::getReferenceTime() << " " << dashp2p::Utilities::now() << " " << availableContigIntervalBytes << " " << availableContigIntervalTime << "\n";
 	myfile.close();
 }
 
@@ -938,7 +894,7 @@ void Statistics::prepareFileScalarValues()
 {
 	dp2p_assert(!fileScalarValues);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_scalar_values.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_scalar_values.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileScalarValues = fopen(logPath, "wx");
 	dp2p_assert(fileScalarValues);
 	fprintf(fileScalarValues, "<ScalarValues>\n");
@@ -948,7 +904,7 @@ void Statistics::prepareFileAdaptationDecision()
 {
 	dp2p_assert(!fileAdaptationDecision);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_adaptation_decision.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_adaptation_decision.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileAdaptationDecision = fopen(logPath, "wx");
 	dp2p_assert(fileAdaptationDecision);
 	//fprintf(fileAdaptationDecision, "| time | beta | rho | rho_last | r_last | r_new | Bdelay | reason |\n");
@@ -959,7 +915,7 @@ void Statistics::prepareFileGiveDataToVlc()
 {
 	dp2p_assert(!fileGiveDataToVlc);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_data_consumed_by_vlc.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_data_consumed_by_vlc.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileGiveDataToVlc = fopen(logPath, "wx");
 	dp2p_assert(fileGiveDataToVlc);
 }
@@ -967,7 +923,7 @@ void Statistics::prepareFileGiveDataToVlc()
 void Statistics::prepareFileTcpState(const int32_t& tcpConnId)
 {
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_TCP%05"PRId32"_state.txt", logDir.c_str(), dash::Utilities::getReferenceTime(), tcpConnId);
+	sprintf(logPath, "%s/log_%020" PRId64 "_TCP%05" PRId32 "_state.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime(), tcpConnId);
 	FILE* f = fopen(logPath, "wx");
 	dp2p_assert(f);
 	//if(tcpConnId == 0) {
@@ -984,7 +940,7 @@ void Statistics::prepareFileBytesStored()
 {
 	dp2p_assert(!fileBytesStored);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_bytes_stored.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_bytes_stored.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileBytesStored = fopen(logPath, "wx");
 	dp2p_assert(fileBytesStored);
 }
@@ -993,7 +949,7 @@ void Statistics::prepareFileSecStored()
 {
 	dp2p_assert(!fileSecStored);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_sec_stored.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_sec_stored.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileSecStored = fopen(logPath, "wx");
 	dp2p_assert(fileSecStored);
 }
@@ -1003,7 +959,7 @@ void Statistics::prepareFileSecDownloaded()
 {
 	dp2p_assert(!fileSecDownloaded);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_sec_downloaded.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_sec_downloaded.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileSecDownloaded = fopen(logPath, "wx");
 	dp2p_assert(fileSecDownloaded);
 }
@@ -1013,7 +969,7 @@ void Statistics::prepareFileUnderruns()
 {
 	dp2p_assert(!fileUnderruns);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_underruns.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_underruns.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileUnderruns = fopen(logPath, "wx");
 	dp2p_assert(fileUnderruns);
 }
@@ -1022,7 +978,7 @@ void Statistics::prepareFileReconnects()
 {
 	dp2p_assert(!fileReconnects);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_reconnects.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_reconnects.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileReconnects = fopen(logPath, "wx");
 	dp2p_assert(fileReconnects);
 }
@@ -1031,7 +987,9 @@ void Statistics::prepareFileSegmentSizes()
 {
 	dp2p_assert(fileSegmentSizes);
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020"PRId64"_segment_sizes.txt", logDir.c_str(), dash::Utilities::getReferenceTime());
+	sprintf(logPath, "%s/log_%020" PRId64 "_segment_sizes.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime());
 	fileSegmentSizes = fopen(logPath, "wx");
 	dp2p_assert(fileSegmentSizes);
+}
+
 }

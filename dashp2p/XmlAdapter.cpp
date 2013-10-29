@@ -30,31 +30,28 @@
 #include "xml/VLCDocumentAdapter.h"
 #include "mpd/ModelReader.h"
 
+namespace dashp2p {
 
-#if DP2P_VLC == 1
-vlc_object_t* XmlAdapter::dashp2pPluginObject = NULL;
-#endif
+//vlc_object_t* XmlAdapter::dashp2pPluginObject = NULL;
 
-
-dash::mpd::MediaPresentationDescription* XmlAdapter::parseMpd(char* buffer, int bufferSize)
+mpd::MediaPresentationDescription* XmlAdapter::parseMpd(char* buffer, int bufferSize)
 {
 
-#if DP2P_VLC == 1
-	dp2p_assert(dashp2pPluginObject);
-    dash::xml::VLCDocumentAdapterFactory* documentFactory = new dash::xml::VLCDocumentAdapterFactory(dashp2pPluginObject);
-#else
-    dash::xml::VLCDocumentAdapterFactory* documentFactory = new dash::xml::VLCDocumentAdapterFactory();
-#endif
+	//dp2p_assert(dashp2pPluginObject);
+    //xml::VLCDocumentAdapterFactory* documentFactory = new xml::VLCDocumentAdapterFactory(dashp2pPluginObject);
+	xml::VLCDocumentAdapterFactory* documentFactory = new xml::VLCDocumentAdapterFactory();
 
     /* the parser will work on a copy of the string and delete it afterwards */
-    dash::xml::BasicDocument* document= documentFactory->createDocument(buffer, bufferSize);
+    xml::BasicDocument* document= documentFactory->createDocument(buffer, bufferSize);
     dp2p_assert(document);
-    dash::mpd::ModelReader modelReader(dash::mpd::ModelFactory::DEFAULT_FACTORY);
-    dash::mpd::MediaPresentationDescription* mpd = modelReader.read(*document);
+    mpd::ModelReader modelReader(mpd::ModelFactory::DEFAULT_FACTORY);
+    mpd::MediaPresentationDescription* mpd = modelReader.read(*document);
 
     /* Clean-up */
     delete document;
     delete documentFactory;
 
     return mpd;
+}
+
 }

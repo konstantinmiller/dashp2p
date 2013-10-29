@@ -27,7 +27,7 @@
 #include <string>
 #include <map>
 
-namespace dash {
+namespace dashp2p {
     namespace mpd {
         struct ParserDescriptor;
         class ParserContext;
@@ -35,7 +35,7 @@ namespace dash {
     }
 }
 
-namespace dash {
+namespace dashp2p {
     namespace mpd {
         class ParserDescriptor {
         public:

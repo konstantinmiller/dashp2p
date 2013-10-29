@@ -21,13 +21,14 @@
  ****************************************************************************/
 
 
-#include "Dashp2pTypes.h"
+//#include "Dashp2pTypes.h"
 #include "DashSegment.h"
 #include "DebugAdapter.h"
 //#include <inttypes.h>
 
+namespace dashp2p {
 
-DashSegment::DashSegment(const ContentIdSegment& segId, int64_t numBytes, dash::Usec duration)
+DashSegment::DashSegment(const ContentIdSegment& segId, int64_t numBytes, int64_t duration)
   : segId(segId),
     dataField(numBytes),
     duration(duration)
@@ -36,16 +37,16 @@ DashSegment::DashSegment(const ContentIdSegment& segId, int64_t numBytes, dash::
 
 void DashSegment::setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite)
 {
-    DBGMSG("Adding data to (RepId %d, SegNr %d) at [%"PRId64", %"PRId64"] with%s overwriting.", segId.bitRate(), segId.bitRate(), byteFrom, byteTo, overwrite?" potential":"out");
+    DBGMSG("Adding data to (RepId %d, SegNr %d) at [%" PRId64 ", %" PRId64 "] with%s overwriting.", segId.bitRate(), segId.bitRate(), byteFrom, byteTo, overwrite?" potential":"out");
     dataField.setData(byteFrom, byteTo, srcBuffer, overwrite);
     //DBGMSG("Return.");
 }
 
-pair<dash::Usec, int64_t> DashSegment::getData(int64_t offset, char* buffer, int bufferSize) const
+pair<int64_t, int64_t> DashSegment::getData(int64_t offset, char* buffer, int bufferSize) const
 {
     const int64_t numCopiedBytes = dataField.getData(offset, buffer, bufferSize);
-    const dash::Usec numCopiedUsecs = (numCopiedBytes * getTotalDuration()) / getTotalSize();
-    return pair<dash::Usec, int64_t>(numCopiedUsecs, numCopiedBytes);
+    const int64_t numCopiedUsecs = (numCopiedBytes * getTotalDuration()) / getTotalSize();
+    return pair<int64_t, int64_t>(numCopiedUsecs, numCopiedBytes);
 }
 
 int64_t DashSegment::getTotalSize() const
@@ -53,9 +54,9 @@ int64_t DashSegment::getTotalSize() const
     return dataField.getReservedSize();
 }
 
-pair<dash::Usec, int64_t> DashSegment::getContigInterval(int64_t offset) const
+pair<int64_t, int64_t> DashSegment::getContigInterval(int64_t offset) const
 {
-    pair<dash::Usec, int64_t> ret;
+    pair<int64_t, int64_t> ret;
     ret.second = dataField.getContigInterval(offset);
     ret.first = (ret.second * getTotalDuration()) / getTotalSize();
     return ret;
@@ -64,4 +65,6 @@ pair<dash::Usec, int64_t> DashSegment::getContigInterval(int64_t offset) const
 void DashSegment::toFile(string& fileName) const
 {
 	dataField.toFile(fileName);
+}
+
 }
