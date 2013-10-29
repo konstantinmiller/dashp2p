@@ -1,0 +1,5 @@
+.cproject
+.project
+*.o
+libdashp2p_plugin.so
+vlc.log
