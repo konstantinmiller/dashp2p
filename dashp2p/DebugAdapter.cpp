@@ -65,7 +65,8 @@ void DebugAdapter::init(DebuggingLevel debuggingLevel, vlc_object_t* dashp2pPlug
 
     DebugAdapter::debuggingLevel = debuggingLevel;
 
-    dp2p_assert(buf == NULL);
+    if(buf != NULL)
+        THROW_RUNTIME("Bug");
     ThreadAdapter::mutexInit(&mutex);
 
     buf = new char[bufLen];
@@ -73,7 +74,8 @@ void DebugAdapter::init(DebuggingLevel debuggingLevel, vlc_object_t* dashp2pPlug
 
     if(dbgFileName != NULL) {
         f = fopen(dbgFileName, "wx");
-        dp2p_assert_v(f, "Could not open file %s.", dbgFileName);
+        if(!f)
+            THROW_RUNTIME("Could not open file %s.", dbgFileName);
     }
 
     DebugAdapter::initialized = true;
