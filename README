@@ -58,9 +58,15 @@ w.r.t. the GITROOT.
    (like, e.g., ~/bin).
 
  o If you want to evaluate adaptation behavior, you should run VLC with the
-   --clock-jitter=0 option. The option --play-and-exit is useful if you want
-   to run a batch of experiments. Also, the options --no-media-library, 
-   --album-arg 0 might speed up the start-up time.
+   following options
+     --clock-jitter=0
+     --no-drop-late-frames
+     --no-skip-frames
+   The option --play-and-exit is useful if you want to run a batch of
+   experiments. Also, the options 
+     --no-media-library, 
+     --album-art 0 
+   might speed up the start-up time.
 
  o If you want to see some overlay information on top of the video about what
    is currently happening, you can add the options
@@ -83,3 +89,18 @@ w.r.t. the GITROOT.
    gdb --eval-command run --args ./vlc/vlc --clock-jitter=0 -Idummy --no-auto-preparse --no-media-library --play-and-exit --album-art 0 --ignore-config --no-input-record-native --dashp2p-width=320 --dashp2p-height=240  --sub-source=overlay --overlay-input=dashp2p_overlay_input --overlay-output=dashp2p_overlay_output http://somehost/somempdfile.mpd
    (In the end, press 'q' to quit the debugger prompt.)
  
+3. Collecting measurements
+
+ o If you want dashp2p to collect measurements and output them to file, you
+   need to add the option
+     --dashp2p-record-traces <path to a folder for traces>
+     --dashp2p-shm <unique string>
+   The option --dashp2p-shm provides a unique name to a shared memory block
+   that enables communication with VLC core modules to
+   collect timestamps when a video frame was demultiplexed, decoded, played
+   for the first time and played for the last time (the latter two values may
+   differ in case of a 'frozen frame'). The option argument can be any unique
+   string. If you run multiple instances of VLC with dashp2p in parallel,
+   each instance need to be passed a unique string.
+
+
