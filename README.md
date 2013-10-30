@@ -9,4 +9,4 @@ The strategy itself was described in more details in: **["Adaptation Algorithm f
 
 Please see the [README](https://github.com/konstantinmiller/dashp2p/blob/master/README) file for more details.
 
-
+You can leave a comment, report an issue, or request a feature [here](https://github.com/konstantinmiller/dashp2p/issues).
