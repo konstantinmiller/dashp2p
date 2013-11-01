@@ -111,7 +111,7 @@ protected:
 
     static bool processAction                   (const ControlLogicAction& a);
     static bool processActionCloseTcpConnection (const ControlLogicActionCloseTcpConnection& a);
-    static bool processActionOpenTcpConnection  (const ControlLogicActionOpenTcpConnection& a);
+    //static bool processActionOpenTcpConnection  (const ControlLogicActionOpenTcpConnection& a);
     static bool processActionStartDownload      (const ControlLogicActionStartDownload& a);
 
     /* Playback related */
@@ -122,13 +122,13 @@ protected:
 
     static bool eof();
 
-    static void closeConnection(const ConnectionId& connId);
+    static void closeConnection(const TcpConnectionId& tcpConnectionId);
 
 protected:
     //enum ControlState {ControlState_Initializing, ControlState_Playing, ControlState_PrepareToPause, ControlState_Paused, ControlState_Terminating, ControlState_Dead};
     enum ControlState {ControlState_Initializing, ControlState_Playing, ControlState_Terminating, ControlState_Dead};
     //typedef map<ReqId, pair<SegId, HttpMethod> > RequestMap; // TODO: consider removing
-    typedef map<int, DashHttp*> HttpMap;
+    //typedef map<int, DashHttp*> HttpMap;
 
 /* Private variables. */
 protected:
@@ -163,7 +163,7 @@ protected:
     static std::string adaptationConfiguration;
 
     /* Download related stuff */
-    static HttpMap httpMap;
+    //static HttpMap httpMap;
     //static RequestMap requestMap;
 
     /* Storage related */

@@ -38,9 +38,10 @@
 # include "config.h"
 #endif
 
-//#include "Dashp2pTypes.h"
-#include "ContentId.h"
 #include "ControlLogicST.h"
+//#include "Dashp2pTypes.h"
+#include "Control.h"
+#include "ContentId.h"
 #include "ControlLogicAction.h"
 #include "Statistics.h"
 #include "OverlayAdapter.h"
@@ -79,7 +80,7 @@ ControlLogicST::ControlLogicST(int width, int height, const std::string& config)
     initialIncreaseTerminationTime(0),
     Bdelay(numeric_limits<int64_t>::max()),
     delayedRequests(),
-    connId(-1),
+    tcpConnectionId(),
     mpdUrl()
 {
 
@@ -107,6 +108,7 @@ ControlLogicST::~ControlLogicST()
     delete betaTimeSeries; betaTimeSeries = NULL;
 }
 
+#if 0
 list<ControlLogicAction*> ControlLogicST::processEventConnected(const ControlLogicEventConnected& e)
 {
 	DBGMSG("Event: %s.", e.toString().c_str());
@@ -119,6 +121,7 @@ list<ControlLogicAction*> ControlLogicST::processEventConnected(const ControlLog
 
 	return actions;
 }
+#endif
 
 list<ControlLogicAction*> ControlLogicST::processEventDataPlayed(const ControlLogicEventDataPlayed& e)
 {
@@ -133,7 +136,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataPlayed(const ControlLo
 	{
 		INFOMSG("[%.3fs] beta <= Bdelay (%.3g <= %.3g). Release %d delayed request(s).", dashp2p::Utilities::now(), e.availableContigInterval.first / 1e6, Bdelay / 1e6, delayedRequests.size());
 		dp2p_assert(delayedRequests.size() == 1);
-		actions.push_back(createActionDownloadSegments(delayedRequests, connId, HttpMethod_GET));
+		actions.push_back(createActionDownloadSegments(delayedRequests, tcpConnectionId, HttpMethod_GET));
 		delayedRequests.clear();
 		Bdelay = numeric_limits<int64_t>::max();
 	}
@@ -160,7 +163,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedMpd(ControlLog
 	if(mpdDataField->full()) {
 		processEventDataReceivedMpd_Completed();
 		ackActionRequestCompleted(HttpRequestManager::getContentId(e.reqId));
-		Statistics::recordRequestStatistics(e.connId, e.reqId);
+		Statistics::recordRequestStatistics(tcpConnectionId, e.reqId);
 	} else {
 		return actions;
 	}
@@ -186,7 +189,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedMpd(ControlLog
 				segIdsHeads.push_back(new ContentIdSegment(periodIndex, adaptationSetIndex, bitRate, segNr));
 			}
 		}
-		actions.push_back(this->createActionDownloadSegments(segIdsHeads, connId, HttpMethod_HEAD));
+		actions.push_back(this->createActionDownloadSegments(segIdsHeads, tcpConnectionId, HttpMethod_HEAD));
 	}
 
 	/* Download the initiallization and the first segment at lowest quality, pipelined */
@@ -203,7 +206,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedMpd(ControlLog
 		contour.setNext(dynamic_cast<const ContentIdSegment&>(**it));
 	}
 
-	actions.push_back(this->createActionDownloadSegments(segIds, connId, HttpMethod_GET));
+	actions.push_back(this->createActionDownloadSegments(segIds, tcpConnectionId, HttpMethod_GET));
 
 	return actions;
 }
@@ -230,7 +233,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 	dp2p_assert(delayedRequests.empty());
 
 	/* Give the HttpRequest object to the Statistics module. It will delete it later. */
-	Statistics::recordRequestStatistics(e.connId, e.reqId);
+	Statistics::recordRequestStatistics(tcpConnectionId, e.reqId);
 
 	betaTimeSeries->pushBack(dashp2p::Utilities::getTime(), e.availableContigInterval.first);
 
@@ -246,8 +249,8 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 	const bool ifBetaMinIncreasing = betaTimeSeries->minIncreasing();
 	const int64_t beta = e.availableContigInterval.first;
 	// TODO: in the next two lines we need to use the proper connection ID!
-	const double rho = Statistics::getThroughput(e.connId, std::min<double>(Delta_t, dashp2p::Utilities::now()));
-	const double rhoLast = Statistics::getThroughputLastRequest(e.connId);
+	const double rho = Statistics::getThroughput(tcpConnectionId, std::min<double>(Delta_t, dashp2p::Utilities::now()));
+	const double rhoLast = Statistics::getThroughputLastRequest(tcpConnectionId);
 	const unsigned completedRequests = (segId.segmentIndex() == 0) ? 1 : segId.segmentIndex() - getStartSegment() + 2;
 	Decision adaptationDecision = selectRepresentation(
 			ifBetaMinIncreasing,
@@ -285,7 +288,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 	if(e.availableContigInterval.first <= Bdelay) {
 		list<const ContentId*> contentIds;
 		contentIds.push_back(segNext);
-		actions.push_back(this->createActionDownloadSegments(contentIds, connId, HttpMethod_GET));
+		actions.push_back(this->createActionDownloadSegments(contentIds, tcpConnectionId, HttpMethod_GET));
 	} else {
 		delayedRequests.push_back(segNext);
 	}
@@ -385,14 +388,16 @@ list<ControlLogicAction*> ControlLogicST::processEventStartPlayback(const Contro
 
 	/* Create a new TCP connection */
 	const int srcId = SourceManager::add(mpdUrl.hostName);
-	connId = TcpConnectionManager::create(srcId);
-	actions.push_back(new ControlLogicActionOpenTcpConnection(connId));
+	tcpConnectionId = TcpConnectionManager::create(srcId);
+	HttpClientManager::create(tcpConnectionId, Control::httpCb);
+
+	//actions.push_back(new ControlLogicActionOpenTcpConnection(connId));
 
 	/* Start MPD download */
 	list<const ContentId*> contentIds(1, new ContentIdMpd);
 	list<dashp2p::URL> urls(1, mpdUrl);
 	list<HttpMethod> httpMethods(1, HttpMethod_GET);
-	actions.push_back(new ControlLogicActionStartDownload(connId, contentIds, urls, httpMethods));
+	actions.push_back(new ControlLogicActionStartDownload(tcpConnectionId, contentIds, urls, httpMethods));
 
 	return actions;
 }

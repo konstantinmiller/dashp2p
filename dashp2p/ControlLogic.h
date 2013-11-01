@@ -69,7 +69,7 @@ public:
 /* Protected methods */
 protected:
 
-    virtual list<ControlLogicAction*> processEventConnected           (const ControlLogicEventConnected& e)      = 0;
+    //virtual list<ControlLogicAction*> processEventConnected           (const ControlLogicEventConnected& e)      = 0;
     virtual list<ControlLogicAction*> processEventDataPlayed          (const ControlLogicEventDataPlayed& e)     = 0;
     virtual list<ControlLogicAction*> processEventDataReceived        (ControlLogicEventDataReceived& e);
     virtual list<ControlLogicAction*> processEventDataReceivedMpd     (ControlLogicEventDataReceived& e)         = 0;
@@ -81,7 +81,7 @@ protected:
     //virtual list<ControlLogicAction*> processEventResumePlayback      (const ControlLogicEventResumePlayback& e) = 0;
     virtual list<ControlLogicAction*> processEventStartPlayback       (const ControlLogicEventStartPlayback& e)  = 0;
 
-    virtual bool ackActionConnected        (const ConnectionId& connId);
+    //virtual bool ackActionConnected        (const ConnectionId& connId);
     virtual bool ackActionRequestCompleted (const ContentId& contentId);
     virtual bool ackActionDisconnect       (const ConnectionId& connId);
 
@@ -91,7 +91,7 @@ protected:
 
     virtual unsigned getIndex(int bitrate);
     virtual void processEventDataReceivedMpd_Completed();
-    virtual ControlLogicAction* createActionDownloadSegments(list<const ContentId*> segIds, int connId, HttpMethod httpMethod) const;
+    virtual ControlLogicAction* createActionDownloadSegments(list<const ContentId*> segIds, const TcpConnectionId& tcpConnectionId, HttpMethod httpMethod) const;
 
 /* Protected types */
 protected:

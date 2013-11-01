@@ -32,57 +32,54 @@
 
 namespace dashp2p {
 
+// static variables in TcpConnectionId
+//int TcpConnectionId::nextId = 0;
+
+// static variables in TcpConnectionManager
 vector<TcpConnection*> TcpConnectionManager::connVec(1024);
 
-TcpConnection::TcpConnection(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests)
-  : srcId(srcId), port(port), ifData(ifData), maxPendingRequests(maxPendingRequests), fdSocket(-1), lastTcpInfo(), /*numConnectEvents(0),*/
+TcpConnection::TcpConnection(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout)
+  : srcId(srcId), port(port), ifData(ifData), maxPendingRequests(maxPendingRequests), connectTimeout(connectTimeout), fdSocket(-1), lastTcpInfo(), /*numConnectEvents(0),*/
     numReqsCompleted(0), keepAliveMaxRemaining(-1), keepAliveTimeoutNext(-1), aHdrReceived(false), recvBufContent(0), recvBuf(NULL), recvTimestamp(-1)
 {
-	/* Allocate buffer for reading from the socket */
-	recvBuf = new char[recvBufSize];
-	dp2p_assert(recvBuf);
+    /* Open the socket. */
+    // TODO: increase outoing buffer size to something around 1 MB or more
+    fdSocket = socket(AF_INET, SOCK_STREAM, 0);
+    dp2p_assert(fdSocket > 0);
 
-	connect();
+    /* TODO: If want to increase socket buffer sizes, must do it here, before connect! */
+
+    /* Bind the socket */
+    if(ifData.initialized) {
+        dp2p_assert(0 == bind(fdSocket, (struct sockaddr*)&ifData.sockaddr_in, sizeof(ifData.sockaddr_in)));
+        DBGMSG("Binded socket to %s:%d.", inet_ntoa(ifData.sockaddr_in.sin_addr), ifData.sockaddr_in.sin_port);
+    }
 }
 
 TcpConnection::~TcpConnection()
 {
-	delete [] recvBuf;
+	disconnect();
 }
 
-void TcpConnection::connect()
+int TcpConnection::connect()
 {
-	dp2p_assert(fdSocket == -1);
-
-	/* Open the socket. */
-	// TODO: increase outoing buffer size to something around 1 MB or more
-	fdSocket = socket(AF_INET, SOCK_STREAM, 0);
-	dp2p_assert(fdSocket != -1);
-
-	/* TODO: If want to increase socket buffer sizes, must do it here, before connect! */
-
-	/* Bind the socket */
-	if(ifData.initialized) {
-		dp2p_assert(0 == bind(fdSocket, (struct sockaddr*)&ifData.sockaddr_in, sizeof(ifData.sockaddr_in)));
-		DBGMSG("Binded socket to %s:%d.", inet_ntoa(ifData.sockaddr_in.sin_addr), ifData.sockaddr_in.sin_port);
-	}
+    dp2p_assert(fdSocket > 0);
 
 	/* Connect. */
-	int retVal = -1;
-	//for(int i = 0; i < 5 && !ifTerminating && retVal != 0; ++i)
-	//{
-		int64_t ticBeforeConnect = Utilities::getAbsTime();
-		retVal = ::connect(fdSocket, (struct sockaddr*)&SourceManager::get(srcId).hostAddr, sizeof(SourceManager::get(srcId).hostAddr));
-		int connectErrno = errno;
-		int64_t tocAfterConnect = Utilities::getAbsTime();
-		DBGMSG("Spent %gs in connect().", (tocAfterConnect - ticBeforeConnect) / 1e6);
-		if(retVal != 0)
-			ERRMSG("connect() returned %d, errno: %d", retVal, connectErrno);
-	//}
-	if(retVal != 0) {
-		ERRMSG("Could not connect to %s.", SourceManager::get(srcId).hostName.c_str());
-		throw std::runtime_error("Could not establish TCP connection.");
+	const int64_t tic = Utilities::getAbsTime();
+	const int retVal = ::connect(fdSocket, (struct sockaddr*)&SourceManager::get(srcId).hostAddr, sizeof(SourceManager::get(srcId).hostAddr));
+	char _errBuf[1024];
+	char *errBuf = strerror_r(errno, _errBuf, sizeof(_errBuf)); // get the error string
+	const int64_t toc = Utilities::getAbsTime();
+	DBGMSG("Spent %gs in connect().", (toc - tic) / 1e6);
+	if(retVal) {
+		WARNMSG("Could not connect to %s. Error in connect(): %s", SourceManager::get(srcId).hostName.c_str(), errBuf);
+		return 1;
 	}
+
+	/* Allocate buffer for reading from the socket */
+	recvBuf = new char[recvBufSize];
+	dp2p_assert(recvBuf);
 
 	//++ numConnectEvents;
 	numReqsCompleted = 0;
@@ -95,12 +92,25 @@ void TcpConnection::connect()
 
 	const pair<int,int> socketBufferLengths = this->getSocketBufferLengths();
 	DBGMSG("Socket snd buf size: %d, socket rcv buf size: %d.", socketBufferLengths.first,socketBufferLengths.second);
+
+	return 0;
 }
 
 void TcpConnection::disconnect()
 {
-	if(fdSocket != -1)
-		dp2p_assert(0 == close(fdSocket));
+	if(fdSocket > 0) {
+	    if(shutdown(fdSocket, SHUT_RDWR)) {
+	        char _errBuf[1024];
+	        char *errBuf = strerror_r(errno, _errBuf, sizeof(_errBuf)); // get the error string
+	        WARNMSG("Could not propertly shutdown() socket to %s: %s.", SourceManager::get(srcId).hostName.c_str(), errBuf);
+	    }
+		if(close(fdSocket)) {
+		    char _errBuf[1024];
+		    char *errBuf = strerror_r(errno, _errBuf, sizeof(_errBuf)); // get the error string
+		    WARNMSG("Could not propertly close() socket to %s: %s.", SourceManager::get(srcId).hostName.c_str(), errBuf);
+		}
+		fdSocket = -2;
+	}
 
 	delete [] recvBuf;
 	recvBuf = NULL;
@@ -161,7 +171,7 @@ void TcpConnection::write(string& s)
 
 void TcpConnection::updateTcpInfo()
 {
-    dp2p_assert(fdSocket != -1);
+    dp2p_assert(fdSocket > 0);
     memset(&lastTcpInfo, 0, sizeof(lastTcpInfo));
     socklen_t len = sizeof(lastTcpInfo);
     dp2p_assert(0 == getsockopt(fdSocket, SOL_TCP, TCP_INFO, &lastTcpInfo, &len) && len == sizeof(lastTcpInfo));
@@ -179,7 +189,7 @@ void TcpConnection::assertSocketHealth() const
 
 pair<int,int> TcpConnection::getSocketBufferLengths() const
 {
-    dp2p_assert(fdSocket != -1);
+    dp2p_assert(fdSocket > 0);
     int socketRcvBufferSize = -1;
     socklen_t socketRcvBufferSize_len = sizeof(socketRcvBufferSize);
     int ret = ::getsockopt(fdSocket, SOL_SOCKET, SO_RCVBUF, &socketRcvBufferSize, &socketRcvBufferSize_len);
@@ -196,9 +206,9 @@ int TcpConnection::state() const
 	return lastTcpInfo.tcpi_state;
 }
 
-int TcpConnectionManager::create(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests)
+int TcpConnectionManager::create(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout)
 {
-	TcpConnection* d = new TcpConnection(srcId, port, ifData, maxPendingRequests);
+	TcpConnection* d = new TcpConnection(srcId, port, ifData, maxPendingRequests, connectTimeout);
 	connVec.push_back(d);
 	return connVec.size() - 1;
 }
@@ -210,10 +220,10 @@ void TcpConnectionManager::cleanup()
 	connVec.clear();
 }
 
-void TcpConnectionManager::logTCPState(const int& connId, const char* reason)
+void TcpConnectionManager::logTCPState(const TcpConnectionId& tcpConnectionId, const char* reason)
 {
-    connVec.at(connId)->updateTcpInfo();
-    Statistics::recordTcpState(connId, reason, connVec.at(connId)->lastTcpInfo);
+    connVec.at(tcpConnectionId.numeric())->updateTcpInfo();
+    Statistics::recordTcpState(tcpConnectionId, reason, connVec.at(tcpConnectionId.numeric())->lastTcpInfo);
 }
 
 string TcpConnectionManager::tcpState2String(int tcpState)

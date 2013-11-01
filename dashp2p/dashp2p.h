@@ -82,7 +82,7 @@ enum ControlType {ControlType_ST = 0, ControlType_pipelinedST = 1, ControlType_M
 
 enum ControlLogicEventType {
 	Event_ActionRejected = 0,
-	Event_Connected = 1,
+	//Event_Connected = 1,
 	Event_DataPlayed = 2,
 	Event_DataReceived = 3,
 	Event_Disconnect = 4,
@@ -95,7 +95,7 @@ enum ControlLogicEventType {
 
 enum ControlLogicActionType {
 	Action_CloseTcpConnection,
-	Action_CreateTcpConnection,
+	//Action_CreateTcpConnection,
 	//Action_FetchHead,
 	Action_StartDownload,
 	//Action_UpdateContour

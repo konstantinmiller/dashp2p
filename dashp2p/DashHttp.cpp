@@ -50,9 +50,9 @@
 
 namespace dashp2p {
 
-DashHttp::DashHttp(ConnectionId id, HttpCb cb)
-  : state(DashHttpState_Undefined),
-    id(id),
+DashHttp::DashHttp(const TcpConnectionId& tcpConnectionId, HttpCb cb)
+  : tcpConnectionId(tcpConnectionId),
+    state(DashHttpState_Undefined),
     ifTerminating(false),
     fdWakeUpSelect(-1),
     reqQueue(),
@@ -125,13 +125,28 @@ DashHttp::~DashHttp()
         dp2p_assert(0 == close(fdNewReqs));
 
     /* Disconnect */
-    TcpConnectionManager::get(id).disconnect();
+    //TcpConnectionManager::get(id).disconnect();
 
     DBGMSG("DashHttp terminated.");
 }
 
 void DashHttp::threadMain()
 {
+    TcpConnection& tc = TcpConnectionManager::get(tcpConnectionId);
+
+    /* Establish TCP connection */
+    const int64_t tic = Utilities::getAbsTime();
+    int64_t toc = tic;
+    while(!ifTerminating && tc.connect()) {
+        toc = Utilities::getAbsTime();
+        if(toc - tic >= tc.connectTimeout) {
+            const SourceData& sd = SourceManager::get(tc.srcId);
+            ERRMSG("Could not connect to %s within %f seconds.", sd.hostName.c_str(), tc.connectTimeout / 1e6);
+            reportDisconnect();
+            return;
+        }
+    }
+
 	//HttpEventConnected* e = new HttpEventConnected(id);
 	//DBGMSG("Before cb().");
 	//cb(e);
@@ -150,10 +165,10 @@ void DashHttp::threadMain()
 
         /* process events */
         if(ev.socketEvent) {
-        	TcpConnectionManager::logTCPState(id, "before recv");
-        	const int bytesReceived = TcpConnectionManager::get(id).read();
-        	TcpConnectionManager::logTCPState(id, "after recv");
-        	const bool socketDisconnected = TcpConnectionManager::get(id).state() != TCP_ESTABLISHED;
+        	TcpConnectionManager::logTCPState(tcpConnectionId, "before recv");
+        	const int bytesReceived = TcpConnectionManager::get(tcpConnectionId).read();
+        	TcpConnectionManager::logTCPState(tcpConnectionId, "after recv");
+        	const bool socketDisconnected = TcpConnectionManager::get(tcpConnectionId).state() != TCP_ESTABLISHED;
 
         	if(bytesReceived > 0)
         		processNewData();
@@ -295,8 +310,8 @@ DashHttp::InternalEvent DashHttp::waitForEvents(const int64_t& to)
 	FD_ZERO(&fdSetRead);
 	int nfds = 0;
 
-	FD_SET(TcpConnectionManager::get(id).fdSocket, &fdSetRead);
-	nfds = max<int>(nfds, TcpConnectionManager::get(id).fdSocket);
+	FD_SET(TcpConnectionManager::get(tcpConnectionId).fdSocket, &fdSetRead);
+	nfds = max<int>(nfds, TcpConnectionManager::get(tcpConnectionId).fdSocket);
 
 	FD_SET(fdNewReqs, &fdSetRead);
 	nfds = max<int>(nfds, fdNewReqs);
@@ -319,7 +334,7 @@ DashHttp::InternalEvent DashHttp::waitForEvents(const int64_t& to)
 	}
 
 	InternalEvent ev;
-	ev.socketEvent = FD_ISSET(TcpConnectionManager::get(id).fdSocket, &fdSetRead);
+	ev.socketEvent = FD_ISSET(TcpConnectionManager::get(tcpConnectionId).fdSocket, &fdSetRead);
 	ev.newRequests = FD_ISSET(fdNewReqs, &fdSetRead);
 	return ev;
 }
@@ -355,7 +370,7 @@ void DashHttp::reportDisconnect()
 	ThreadAdapter::mutexUnlock(&newReqsMutex);
 
 	WARNMSG("Socket disconnected. Queue state: %s.", reqQueue2String().c_str());
-	HttpEventDisconnect* e = new HttpEventDisconnect(id, reqQueue);
+	HttpEventDisconnect* e = new HttpEventDisconnect(tcpConnectionId, reqQueue);
 	reqQueue.clear();
 	DBGMSG("Before cb().");
 	cb(e);
@@ -563,7 +578,7 @@ void DashHttp::readFromSocket(int bytesExpected)
 
 void DashHttp::processNewData()
 {
-	TcpConnection& tc = TcpConnectionManager::get(id);
+	TcpConnection& tc = TcpConnectionManager::get(tcpConnectionId);
 	SourceData& sd = SourceManager::get(tc.srcId);
 
     /* Process buffer content */
@@ -658,13 +673,13 @@ void DashHttp::processNewData()
 
         /* If at least the header is completed, give data to the user. */
         if(HttpRequestManager::isHdrCompleted(reqId) && HttpRequestManager::getPldBytesReceived(reqId) > 0) {
-        	HttpEventDataReceived* eventDataReceived = new HttpEventDataReceived(id, reqId, pldBytesBefore, HttpRequestManager::getPldBytesReceived(reqId) - 1);
+        	HttpEventDataReceived* eventDataReceived = new HttpEventDataReceived(tcpConnectionId, reqId, pldBytesBefore, HttpRequestManager::getPldBytesReceived(reqId) - 1);
         	DBGMSG("Before cb().");
         	cb(eventDataReceived);
         	DBGMSG("cb() returned.");
         	//cb(req->reqId, ifData.name, recvBuf + recvBufProcessed + (req->hdrBytesReceived - hdrBytesBefore), pldBytesBefore, req->pldBytesReceived - 1, req->hdr.contentLength);
         } else if(HttpRequestManager::isHdrCompleted(reqId)) {
-        	HttpEventDataReceived* eventDataReceived = new HttpEventDataReceived(id, reqId, 0, 0);
+        	HttpEventDataReceived* eventDataReceived = new HttpEventDataReceived(tcpConnectionId, reqId, 0, 0);
         	DBGMSG("Before cb().");
         	cb(eventDataReceived);
         	DBGMSG("cb() returned.");
@@ -711,7 +726,7 @@ bool DashHttp::checkStartNewRequests()
         return false;
     }
 
-    TcpConnection& tc = TcpConnectionManager::get(id);
+    TcpConnection& tc = TcpConnectionManager::get(tcpConnectionId);
     SourceData& sd = SourceManager::get(tc.srcId);
 
     /* If client-side restriction on max number sent requests reached, return. */
@@ -771,7 +786,7 @@ bool DashHttp::checkStartNewRequests()
 
 void DashHttp::sendHttpRequest(const list<int>& reqsToSend)
 {
-	TcpConnection& tc = TcpConnectionManager::get(id);
+	TcpConnection& tc = TcpConnectionManager::get(tcpConnectionId);
 	SourceData& sd = SourceManager::get(tc.srcId);
 
     /* Formulate GET requests */
@@ -801,7 +816,7 @@ void DashHttp::sendHttpRequest(const list<int>& reqsToSend)
     	tc.keepAliveTimeoutNext = Utilities::getAbsTime() + sd.keepAliveTimeout;
 
     /* Log TCP status. */
-    TcpConnectionManager::logTCPState(id, "after send()");
+    TcpConnectionManager::logTCPState(tcpConnectionId, "after send()");
     //dp2p_assert(fdSocket != -1);
     //assertSocketHealth();
     //updateTcpInfo();
@@ -895,7 +910,7 @@ int DashHttp::parseData(const char* p, int size, int reqId, double recvTimestamp
 
 void DashHttp::parseHeader(int reqId) const
 {
-	TcpConnection& tc = TcpConnectionManager::get(id);
+	TcpConnection& tc = TcpConnectionManager::get(tcpConnectionId);
 	SourceData& sd = SourceManager::get(tc.srcId);
 
 	const HttpHdr& hdr = HttpRequestManager::parseHeader(reqId);
@@ -930,6 +945,7 @@ void DashHttp::parseHeader(int reqId) const
 	}
 }
 
+#if 0
 string DashHttp::connectionState2String() const
 {
 	TcpConnection& tc = TcpConnectionManager::get(id);
@@ -940,10 +956,11 @@ string DashHttp::connectionState2String() const
 	ret.append(tmp);
 	return ret;
 }
+#endif
 
 int64_t DashHttp::calculateExpectedHttpTimeout() const
 {
-	TcpConnection& tc = TcpConnectionManager::get(id);
+	TcpConnection& tc = TcpConnectionManager::get(tcpConnectionId);
 	SourceData& sd = SourceManager::get(tc.srcId);
 
 	int64_t nowAbs = Utilities::getAbsTime();

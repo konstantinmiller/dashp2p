@@ -30,6 +30,7 @@
 #include "ThreadAdapter.h"
 #include "DebugAdapter.h"
 #include "HttpRequestManager.h"
+#include "TcpConnectionManager.h"
 
 #include <semaphore.h>
 #include <string>
@@ -61,7 +62,7 @@ public:
     /** Constructor that also initializes DashHttp.
      *  @parameter id                      Identifier, provided by caller, used later in call-back functions to identify the connection.
      *  @parameter cb                      Call-back function for all kinds of events. */
-    DashHttp(ConnectionId id, HttpCb cb);
+    DashHttp(const TcpConnectionId& tcpConnectionId, HttpCb cb);
 
     virtual ~DashHttp();
 
@@ -120,7 +121,7 @@ protected:
     int parseData(const char* p, int size, const int reqId, double recvTimestamp);
     void parseHeader(const int reqId) const;
     //string serverState2String() const;
-    string connectionState2String() const;
+    //string connectionState2String() const;
     int64_t calculateExpectedHttpTimeout() const;
 
     /* TCP related stuff */
@@ -129,10 +130,13 @@ protected:
     /***** throughput related stuff *****/
     //int64_t getOutstandingPldBytes() const;
 
+/* Public variables */
+public:
+    const TcpConnectionId tcpConnectionId;
+
 /* Private variables. */
 private:
     enum DashHttpState {DashHttpState_Undefined = 0, DashHttpState_Constructed = 1, DashHttpState_NotAcceptingRequests = 2} state;
-    ConnectionId id;
 
     /* Termination flag */
     bool ifTerminating;

@@ -41,7 +41,7 @@ public:
     virtual string toString() const {
     	switch(getType()) {
     	case Event_ActionRejected: return "ActionRejected";
-    	case Event_Connected:      return "Connected";
+    	//case Event_Connected:      return "Connected";
     	case Event_DataPlayed:     return "DataPlayed";
     	case Event_DataReceived:   return "DataReceived";
     	case Event_Disconnect:     return "Disconnect";
@@ -67,7 +67,7 @@ public:
 };
 
 
-class ControlLogicEventConnected: public ControlLogicEvent
+/*class ControlLogicEventConnected: public ControlLogicEvent
 {
 public:
 	ControlLogicEventConnected(int connId): connId(connId) {}
@@ -76,7 +76,7 @@ public:
 
 public:
     const ConnectionId connId;
-};
+};*/
 
 
 class ControlLogicEventDataPlayed: public ControlLogicEvent
@@ -94,9 +94,9 @@ public:
 class ControlLogicEventDataReceived: public ControlLogicEvent
 {
 public:
-    ControlLogicEventDataReceived(int32_t connId, int reqId, int64_t byteFrom, int64_t byteTo, pair<int64_t, int64_t> availableContigInterval)
+    ControlLogicEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo, pair<int64_t, int64_t> availableContigInterval)
       : ControlLogicEvent(),
-        connId(connId),
+        tcpConnectionId(tcpConnectionId),
         reqId(reqId),
         byteFrom(byteFrom),
         byteTo(byteTo),
@@ -106,7 +106,7 @@ public:
     virtual ControlLogicEventType getType() const {return Event_DataReceived;}
 
 public:
-    int32_t connId;
+    const TcpConnectionId tcpConnectionId;
     int reqId;
     const int64_t byteFrom;
     const int64_t byteTo;
@@ -117,12 +117,12 @@ public:
 class ControlLogicEventDisconnect: public ControlLogicEvent
 {
 public:
-	ControlLogicEventDisconnect(int connId, list<int> reqs): connId(connId), reqs(reqs) {}
+	ControlLogicEventDisconnect(const TcpConnectionId& tcpConnectionId, list<int> reqs): tcpConnectionId(tcpConnectionId), reqs(reqs) {}
     virtual ~ControlLogicEventDisconnect() {}
     virtual ControlLogicEventType getType() const {return Event_Disconnect;}
 
 public:
-    const int connId;
+    const TcpConnectionId tcpConnectionId;
     const list<int> reqs;
 };
 

@@ -42,10 +42,10 @@ namespace dashp2p {
 const MpdWrapper* Statistics::mpdWrapper = NULL;
 std::string Statistics::logDir;
 //std::list<HttpRequest*> Statistics::rsList;
-map<int32_t, list<int> > Statistics::httpRequests;
-int32_t Statistics::lastTcpConnectionId = -1;
+map<int, list<int> > Statistics::httpRequests;
+//TcpConnectionId Statistics::lastTcpConnectionId = -1;
 bool  Statistics::logTcpState = false;
-map<int32_t, FILE*> Statistics::filesTcpState;
+map<int, FILE*> Statistics::filesTcpState;
 bool  Statistics::logScalarValues = false;
 FILE* Statistics::fileScalarValues = NULL;
 bool  Statistics::logAdaptationDecision = false;
@@ -193,6 +193,7 @@ if(fileSecDownloaded != NULL) {
     Statistics::logRequestDownloadProgress = false;
 }
 
+#if 0
 int32_t Statistics::registerTcpConnection()
 {
 	const int32_t tcpConnId = ++lastTcpConnectionId;
@@ -208,44 +209,45 @@ void Statistics::unregisterTcpConnection(const int32_t tcpConnId)
 		filesTcpState.erase(tcpConnId);
 	}
 }
+#endif
 
 // fixme: change the usage of this functions. is should not be necessary to call it explicitely. all dat amust go statistics immediately.
-void Statistics::recordRequestStatistics(const int32_t tcpConnId, int reqId)
+void Statistics::recordRequestStatistics(const TcpConnectionId& tcpConnectionId, int reqId)
 {
-	if(0 == httpRequests.count(tcpConnId)) {
-		httpRequests.insert(pair<int32_t, list<int> >(tcpConnId, list<int>()));
+	if(0 == httpRequests.count(tcpConnectionId.numeric())) {
+		httpRequests.insert(pair<int, list<int> >(tcpConnectionId.numeric(), list<int>()));
 	}
 
-    httpRequests.at(tcpConnId).push_back(reqId);
+    httpRequests.at(tcpConnectionId.numeric()).push_back(reqId);
 
     if(HttpRequestManager::getContentId(reqId).getType() == ContentType_Segment)
         Control::displayThroughputOverlay(
                 dynamic_cast<const ContentIdSegment&>(HttpRequestManager::getContentId(reqId)).segmentIndex(),
                 HttpRequestManager::getTsLastByte(reqId),
-                Statistics::getThroughputLastRequest(tcpConnId));
+                Statistics::getThroughputLastRequest(tcpConnectionId));
     else
-        Control::displayThroughputOverlay(-1, HttpRequestManager::getTsLastByte(reqId), Statistics::getThroughputLastRequest(tcpConnId));
+        Control::displayThroughputOverlay(-1, HttpRequestManager::getTsLastByte(reqId), Statistics::getThroughputLastRequest(tcpConnectionId));
 }
 
-int Statistics::numCompletedRequests(const int32_t tcpConnId)
+int Statistics::numCompletedRequests(const TcpConnectionId& tcpConnectionId)
 {
-	dp2p_assert(0 < httpRequests.count(tcpConnId));
-	return httpRequests.at(tcpConnId).size();
+	dp2p_assert(0 < httpRequests.count(tcpConnectionId.numeric()));
+	return httpRequests.at(tcpConnectionId.numeric()).size();
 }
 
-int Statistics::getLastRequest(const int32_t tcpConnId)
+int Statistics::getLastRequest(const TcpConnectionId& tcpConnectionId)
 {
-	dp2p_assert(0 < httpRequests.count(tcpConnId) && !httpRequests.at(tcpConnId).empty());
-    return httpRequests.at(tcpConnId).back();
+	dp2p_assert(0 < httpRequests.count(tcpConnectionId.numeric()) && !httpRequests.at(tcpConnectionId.numeric()).empty());
+    return httpRequests.at(tcpConnectionId.numeric()).back();
 }
 
 // TODO: validate throughput calculations (no bugs noticed but just to be sure)
-double Statistics::getThroughput(const int32_t tcpConnId, double delta, string devName)
+double Statistics::getThroughput(const TcpConnectionId& tcpConnectionId, double delta, string devName)
 {
     const double now = dashp2p::Utilities::now();
 
-    dp2p_assert(0 < httpRequests.count(tcpConnId));
-    list<int>& rsList = httpRequests.at(tcpConnId);
+    dp2p_assert(0 < httpRequests.count(tcpConnectionId.numeric()));
+    list<int>& rsList = httpRequests.at(tcpConnectionId.numeric());
     dp2p_assert(!rsList.empty());
 
     if(delta > now) {
@@ -259,7 +261,7 @@ double Statistics::getThroughput(const int32_t tcpConnId, double delta, string d
     while(true)
     {
         const int reqId = *it;
-        if(devName.empty() || TcpConnectionManager::get(tcpConnId).ifData.name.compare(devName) == 0)
+        if(devName.empty() || TcpConnectionManager::get(tcpConnectionId).ifData.name.compare(devName) == 0)
         {
             const double startTime = HttpRequestManager::getTsSent(reqId);
             const double complTime = HttpRequestManager::getTsLastByte(reqId);
@@ -298,10 +300,10 @@ double Statistics::getThroughput(const int32_t tcpConnId, double delta, string d
     }
 }
 
-double Statistics::getThroughputLastRequest(const int32_t tcpConnId)
+double Statistics::getThroughputLastRequest(const TcpConnectionId& tcpConnectionId)
 {
-    dp2p_assert(0 < httpRequests.count(tcpConnId));
-    list<int>& rsList = httpRequests.at(tcpConnId);
+    dp2p_assert(0 < httpRequests.count(tcpConnectionId.numeric()));
+    list<int>& rsList = httpRequests.at(tcpConnectionId.numeric());
     dp2p_assert(!rsList.empty());
 
     const int reqId = rsList.back();
@@ -310,12 +312,12 @@ double Statistics::getThroughputLastRequest(const int32_t tcpConnId)
 
 // TODO: assumes that requests are received in chronological order. fails if this is not the case!
 // TODO: add input argument for the tcp flow or interface or something in order to handle the situation, where requests are issued in parallel.
-std::vector<double> Statistics::getReceivedBytes(const int32_t tcpConnId, std::vector<double> tVec)
+std::vector<double> Statistics::getReceivedBytes(const TcpConnectionId& tcpConnectionId, std::vector<double> tVec)
 {
     dp2p_assert(tVec.size() > 1);
 
-    dp2p_assert(0 < httpRequests.count(tcpConnId));
-    list<int>& rsList = httpRequests.at(tcpConnId);
+    dp2p_assert(0 < httpRequests.count(tcpConnectionId.numeric()));
+    list<int>& rsList = httpRequests.at(tcpConnectionId.numeric());
     dp2p_assert(!rsList.empty());
 
     /* Prepare the return value */
@@ -436,9 +438,9 @@ void Statistics::outputStatistics()
     if(logDir.empty() || httpRequests.empty())
     	return;
 
-    for(map<int32_t, list<int> >::const_iterator it = httpRequests.begin(); it != httpRequests.end(); ++it)
+    for(map<int, list<int> >::const_iterator it = httpRequests.begin(); it != httpRequests.end(); ++it)
     {
-    	const int32_t tcpConnId = it->first;
+    	const int tcpConnId = it->first;
     	const list<int>& reqList = it->second;
 
     	if(reqList.empty())
@@ -716,19 +718,19 @@ void Statistics::recordTcpState(const char* reason, const struct tcp_info& tcpIn
 }
 #endif
 
-void Statistics::recordTcpState(const int32_t& tcpConnId, const char* reason, const struct tcp_info& tcpInfo)
+void Statistics::recordTcpState(const TcpConnectionId& tcpConnectionId, const char* reason, const struct tcp_info& tcpInfo)
 {
-	static map<int32_t, struct tcp_info> lastTcpInfo;
+	static map<int, struct tcp_info> lastTcpInfo;
 
 	if(logDir.empty() || !logTcpState)
 		return;
 
-	if(0 == filesTcpState.count(tcpConnId))
-		prepareFileTcpState(tcpConnId);
+	if(0 == filesTcpState.count(tcpConnectionId.numeric()))
+		prepareFileTcpState(tcpConnectionId);
 
-	if(tcpInfo != lastTcpInfo[tcpConnId])
+	if(tcpInfo != lastTcpInfo[tcpConnectionId.numeric()])
 	{
-		fprintf(filesTcpState.at(tcpConnId),
+		fprintf(filesTcpState.at(tcpConnectionId.numeric()),
 				"%17" PRId64 " %17s %19s %19s %13u %8u %9u %9u %12u %12u % 11.6f %9u %9u %9u %9u %8u %8u %9u %9u %16u %15u %16u %15u %8u %14u % 11.6f % 10.6f %14u %10u %8u %12u %9u %11u %15u\n",
 				dashp2p::Utilities::getAbsTime(),
 				reason,
@@ -764,7 +766,7 @@ void Statistics::recordTcpState(const int32_t& tcpConnId, const char* reason, co
 				tcpInfo.tcpi_rcv_rtt,
 				tcpInfo.tcpi_rcv_space,
 				tcpInfo.tcpi_total_retrans);
-		lastTcpInfo[tcpConnId] = tcpInfo;
+		lastTcpInfo[tcpConnectionId.numeric()] = tcpInfo;
 	}
 }
 
@@ -920,10 +922,10 @@ void Statistics::prepareFileGiveDataToVlc()
 	dp2p_assert(fileGiveDataToVlc);
 }
 
-void Statistics::prepareFileTcpState(const int32_t& tcpConnId)
+void Statistics::prepareFileTcpState(const TcpConnectionId& tcpConnectionId)
 {
 	char logPath[1024];
-	sprintf(logPath, "%s/log_%020" PRId64 "_TCP%05" PRId32 "_state.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime(), tcpConnId);
+	sprintf(logPath, "%s/log_%020" PRId64 "_TCP%05" PRId32 "_state.txt", logDir.c_str(), dashp2p::Utilities::getReferenceTime(), tcpConnectionId.numeric());
 	FILE* f = fopen(logPath, "wx");
 	dp2p_assert(f);
 	//if(tcpConnId == 0) {
@@ -933,7 +935,7 @@ void Statistics::prepareFileTcpState(const int32_t& tcpConnId)
 		fprintf(f, "      Time        |     Reason      |     TCP_STATE     |    TCP_CA_STATE   | retransmits | probes | backoff | options | snd_wscale | rcv_wscale |    rto    |   ato   | snd_mss | rcv_mss | unacked | sacked |  lost  | retrans | fackets | last_data_sent | last_ack_sent | last_data_recv | last_ack_recv |  pmtu  | rcv_ssthresh |    rtt    |  rttvar  | snd_ssthresh | snd_cwnd | advmss | reordering | rcv_rtt | rcv_space | total_retrans |\n");
 		fprintf(f, "------------------|-----------------|-------------------|-------------------|-------------|--------|---------|---------|------------|------------|-----------|---------|---------|---------|---------|--------|--------|---------|---------|----------------|---------------|----------------|---------------|--------|--------------|-----------|----------|--------------|----------|--------|------------|---------|-----------|---------------|\n");
 	//}
-	dp2p_assert(filesTcpState.insert(pair<int32_t, FILE*>(tcpConnId, f)).second);
+	dp2p_assert(filesTcpState.insert(pair<int, FILE*>(tcpConnectionId.numeric(), f)).second);
 }
 
 void Statistics::prepareFileBytesStored()

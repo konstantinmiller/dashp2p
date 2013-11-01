@@ -80,11 +80,11 @@ list<ControlLogicAction*> ControlLogic::processEvent(ControlLogicEvent* e)
     switch(e->getType())
     {
 
-    case Event_Connected: {
+    /*case Event_Connected: {
     	const ControlLogicEventConnected& event = dynamic_cast<const ControlLogicEventConnected&>(*e);
     	actions = processEventConnected(event);
     	break;
-    }
+    }*/
 
     case Event_DataPlayed: {
     	dp2p_assert(state == HAVE_MPD);
@@ -244,6 +244,7 @@ list<ControlLogicAction*> ControlLogic::processEventDataReceived(ControlLogicEve
 	return list<ControlLogicAction*>();
 }
 
+#if 0
 bool ControlLogic::ackActionConnected (const ConnectionId& connId)
 {
 	int ret = 0;
@@ -268,6 +269,7 @@ bool ControlLogic::ackActionConnected (const ConnectionId& connId)
 	DBGMSG("Removed %d actions from pending actions list. Pending: %d.", ret, pendingActions.size());
 	return ret;
 }
+#endif
 
 bool ControlLogic::ackActionRequestCompleted (const ContentId& contentId)
 {
@@ -423,7 +425,7 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 	DBGMSG("Setting startSegment: %d, stopSegment: %d.", startSegment, stopSegment);
 }
 
-ControlLogicAction* ControlLogic::createActionDownloadSegments(list<const ContentId*> segIds, int connId, HttpMethod httpMethod) const
+ControlLogicAction* ControlLogic::createActionDownloadSegments(list<const ContentId*> segIds, const TcpConnectionId& tcpConnectionId, HttpMethod httpMethod) const
 {
 	list<dashp2p::URL> urls;
 	list<HttpMethod> httpMethods;
@@ -432,7 +434,7 @@ ControlLogicAction* ControlLogic::createActionDownloadSegments(list<const Conten
 		urls.push_back(dashp2p::Utilities::splitURL(mpdWrapper->getSegmentURL(dynamic_cast<const ContentIdSegment&>(**it))));
 		httpMethods.push_back(httpMethod);
 	}
-	return new ControlLogicActionStartDownload(connId, segIds, urls, httpMethods);
+	return new ControlLogicActionStartDownload(tcpConnectionId, segIds, urls, httpMethods);
 }
 
 }

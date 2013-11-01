@@ -27,6 +27,7 @@
 #include "Utilities.h"
 #include "ContentId.h"
 #include "MpdWrapper.h"
+#include "TcpConnectionManager.h"
 #include <list>
 #include <vector>
 #include <map>
@@ -63,14 +64,14 @@ public:
     static int32_t registerTcpConnection();
     static void unregisterTcpConnection(const int32_t tcpConnId);
 
-    static void recordRequestStatistics(const int32_t tcpConnId, int reqId);
-    static int numCompletedRequests(const int32_t tcpConnId);
-    static int getLastRequest(const int32_t tcpConnId);
+    static void recordRequestStatistics(const TcpConnectionId& tcpConnectionId, int reqId);
+    static int numCompletedRequests(const TcpConnectionId& tcpConnectionId);
+    static int getLastRequest(const TcpConnectionId& tcpConnectionId);
     /* Note: Does not consider the last segment. So, the result is only valid if called directly after a request is completed
      * and the request data were passed to the Statistics module. */
-    static double getThroughput(const int32_t tcpConnId, double delta, string devName = "");
-    static double getThroughputLastRequest(const int32_t tcpConnId); // [bit/s]
-    static std::vector<double> getReceivedBytes(const int32_t tcpConnId, std::vector<double> tVec);
+    static double getThroughput(const TcpConnectionId& tcpConnectionId, double delta, string devName = "");
+    static double getThroughputLastRequest(const TcpConnectionId& tcpConnectionId); // [bit/s]
+    static std::vector<double> getReceivedBytes(const TcpConnectionId& tcpConnectionId, std::vector<double> tVec);
     static void outputStatistics();
 
     static void recordAdaptationDecision(double relTime, int64_t beta, double rho, double rhoLast, int r_last, int r_new, int64_t Bdelay, bool betaMinIncreasing, int reason);
@@ -85,7 +86,7 @@ public:
     static void recordScalarU64(const char* name, uint64_t value);
 
     //static void recordTcpState(const char* reason, const struct tcp_info& tcpInfo);
-    static void recordTcpState(const int32_t& tcpConnId, const char* reason, const struct tcp_info& tcpInfo);
+    static void recordTcpState(const TcpConnectionId& tcpConnectionId, const char* reason, const struct tcp_info& tcpInfo);
     static void recordBytesStored(int64_t time, int64_t bytes);
     static void recordUsecStored(int64_t time, int64_t usec);
     static void recordUnderrun(int64_t begin, int64_t duration);
@@ -103,7 +104,7 @@ private:
     static void prepareFileScalarValues();
     static void prepareFileAdaptationDecision();
     static void prepareFileGiveDataToVlc();
-    static void prepareFileTcpState(const int32_t& tcpConnId);
+    static void prepareFileTcpState(const TcpConnectionId& tcpConnectionId);
     static void prepareFileBytesStored();
     static void prepareFileSecStored();
     //static void prepareFileSecDownloaded();
@@ -116,10 +117,10 @@ private:
     static const MpdWrapper* mpdWrapper;
     static std::string logDir;
     //static std::list<HttpRequest*> rsList;
-    static map<int32_t, list<int> > httpRequests;
-    static int32_t lastTcpConnectionId;
+    static map<int, list<int> > httpRequests;
+    //static TcpConnectionId lastTcpConnectionId;
     static bool  logTcpState;
-    static map<int32_t, FILE*> filesTcpState;
+    static map<int, FILE*> filesTcpState;
     static bool  logScalarValues;
     static FILE* fileScalarValues;
     static bool  logAdaptationDecision;

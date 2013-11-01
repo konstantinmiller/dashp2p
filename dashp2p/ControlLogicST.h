@@ -26,6 +26,7 @@
 #include "dashp2p.h"
 #include "ControlLogic.h"
 #include "TimeSeries.h"
+#include "TcpConnectionManager.h"
 #include <string>
 #include <vector>
 #include <set>
@@ -96,7 +97,7 @@ private:
 /* Private methods */
 private:
 
-    virtual list<ControlLogicAction*> processEventConnected           (const ControlLogicEventConnected& e);
+    //virtual list<ControlLogicAction*> processEventConnected           (const ControlLogicEventConnected& e);
     virtual list<ControlLogicAction*> processEventDataPlayed          (const ControlLogicEventDataPlayed& e);
     virtual list<ControlLogicAction*> processEventDataReceivedMpd     (ControlLogicEventDataReceived& e);
     //virtual list<ControlLogicAction*> processEventDataReceivedMpdPeer (ControlLogicEventDataReceived& /*e*/) {abort(); return list<ControlLogicAction*>();}
@@ -138,7 +139,7 @@ private:
     int64_t Bdelay;
     list<const ContentId*> delayedRequests;
 
-    int connId;
+    TcpConnectionId tcpConnectionId;
     dashp2p::URL mpdUrl;
 };
 

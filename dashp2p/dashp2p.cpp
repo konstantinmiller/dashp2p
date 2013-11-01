@@ -274,6 +274,7 @@ static void Close( vlc_object_t *p_this )
     Statistics::cleanUp();
     if(p_sys->withOverlay)
         OverlayAdapter::cleanup();
+    HttpClientManager::cleanup();
     TcpConnectionManager::cleanup();
     SourceManager::cleanup();
 

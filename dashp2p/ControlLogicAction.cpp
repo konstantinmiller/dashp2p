@@ -37,7 +37,7 @@ string ControlLogicActionStartDownload::toString() const
 {
 	ostringstream ret;
 	ret << "StartDownload: { ";
-	ret << "ConnId: " << tcpConnectionId << ", ";
+	ret << "HttpClientId: " << (string)tcpConnectionId << ", ";
 	list<const ContentId*>::const_iterator it = contentIds.begin();
 	list<dashp2p::URL>::const_iterator        jt = urls.begin();
 	list<HttpMethod>::const_iterator       kt = httpMethods.begin();

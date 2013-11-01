@@ -27,6 +27,7 @@
 #include "dashp2p.h"
 #include "ThreadAdapter.h"
 #include "ContentId.h"
+#include "HttpClientManager.h"
 
 #include <list>
 #include <string>
@@ -68,7 +69,7 @@ public:
 
 	/** Creates a new HTTP request.
 	 *  @param contentId  Provided by the caller for later identification of the downloaded data in the call-back. We take over the memory management. */
-	static int newHttpRequest(const int& connId, const ContentId* contentId, /*const string& hostName,*/ const string& file, bool withPipelining, HttpMethod httpMethod);
+	static int newHttpRequest(const TcpConnectionId& tcpConnectionId, const ContentId* contentId, /*const string& hostName,*/ const string& file, bool withPipelining, HttpMethod httpMethod);
 
 	static void appendHdrBytes(int reqId, const void* p, int newHdrBytes, int64_t recvTimestamp);
 	static void appendPldBytes(int reqId, const void* p, int newPldBytes, int64_t recvTimestamp);
@@ -119,7 +120,7 @@ private:
 	public:
 		/** Constructor.
 		 *  @param contentId  Provided by the caller for later identification of the downloaded data in the call-back. We take over the memory management. */
-		HttpRequest(const int& connId, const ContentId* contentId, /*const string& hostName,*/ const string& file, bool withPipelining, HttpMethod httpMethod);
+		HttpRequest(const TcpConnectionId& tcpConnectionId, const ContentId* contentId, /*const string& hostName,*/ const string& file, bool withPipelining, HttpMethod httpMethod);
 
 		virtual ~HttpRequest();
 
@@ -133,7 +134,7 @@ private:
 		bool completed() const;
 
 	public:
-		const int connId;
+		const TcpConnectionId tcpConnectionId;
 		const int reqId;
 
 		//const string hostName;

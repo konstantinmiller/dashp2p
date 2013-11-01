@@ -35,7 +35,8 @@ const int HttpRequestManager::s = 1024;
 vector<vector<HttpRequestManager::HttpRequest*>* > HttpRequestManager::reqs;
 Mutex HttpRequestManager::mutex;
 
-int HttpRequestManager::newHttpRequest(const int& connId, const ContentId* contentId, /*const string& hostName,*/ const string& file, bool withPipelining, HttpMethod httpMethod)
+int HttpRequestManager::newHttpRequest(const TcpConnectionId& tcpConnectionId, const ContentId* contentId,
+        /*const string& hostName,*/ const string& file, bool withPipelining, HttpMethod httpMethod)
 {
 	ThreadAdapter::mutexLock(&mutex);
 
@@ -45,7 +46,7 @@ int HttpRequestManager::newHttpRequest(const int& connId, const ContentId* conte
 	}
 
 	const int reqId = s * (reqs.size() - 1) + reqs.back()->size();
-	reqs.back()->push_back(new HttpRequest(connId, contentId, file, withPipelining, httpMethod));
+	reqs.back()->push_back(new HttpRequest(tcpConnectionId, contentId, file, withPipelining, httpMethod));
 
 	ThreadAdapter::mutexUnlock(&mutex);
 
@@ -313,8 +314,9 @@ void HttpRequestManager::cleanup()
 
 unsigned HttpRequestManager::HttpRequest::nextReqId = 0;
 
-HttpRequestManager::HttpRequest::HttpRequest(const int& connId, const ContentId* contentId, /*const string& hostName,*/ const string& file, bool allowPipelining, HttpMethod httpMethod)
-  : connId(connId),
+HttpRequestManager::HttpRequest::HttpRequest(const TcpConnectionId& tcpConnectionId, const ContentId* contentId,
+        /*const string& hostName,*/ const string& file, bool allowPipelining, HttpMethod httpMethod)
+  : tcpConnectionId(tcpConnectionId),
     reqId(nextReqId),
     //hostName(hostName),
     file(file),

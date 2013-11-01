@@ -32,10 +32,10 @@ namespace dashp2p {
 
 class HttpEvent {
 public:
-	HttpEvent(const int32_t connId): connId(connId) {}
+	HttpEvent(const TcpConnectionId& tcpConnectionId): tcpConnectionId(tcpConnectionId) {}
 	virtual ~HttpEvent(){}
 	virtual HttpEventType getType() const = 0;
-	virtual int32_t getConnId() const {return connId;}
+	virtual const TcpConnectionId& getConnId() const {return tcpConnectionId;}
 
 	virtual string toString() const
 	{
@@ -50,7 +50,7 @@ public:
 		}
 	}
 private:
-	const int32_t connId;
+	const TcpConnectionId tcpConnectionId;
 };
 
 
@@ -66,8 +66,8 @@ public:
 class HttpEventDataReceived: public HttpEvent
 {
 public:
-	HttpEventDataReceived(int32_t connId, int reqId, int64_t byteFrom, int64_t byteTo)
-	  : HttpEvent(connId),
+	HttpEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo)
+	  : HttpEvent(tcpConnectionId),
 	    byteFrom(byteFrom),
 	    byteTo(byteTo),
 	    reqId(reqId) {}
@@ -85,7 +85,7 @@ public:
 class HttpEventDisconnect: public HttpEvent
 {
 public:
-	HttpEventDisconnect(int connId, list<int> reqs): HttpEvent(connId), reqs(reqs) {}
+	HttpEventDisconnect(const TcpConnectionId& tcpConnectionId, list<int> reqs): HttpEvent(tcpConnectionId), reqs(reqs) {}
 	virtual ~HttpEventDisconnect(){}
 	virtual HttpEventType getType() const {return HttpEvent_Disconnect;}
 

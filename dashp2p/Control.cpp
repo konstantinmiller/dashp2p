@@ -25,6 +25,7 @@
 #include "Control.h"
 #include "HttpRequestManager.h"
 #include "TcpConnectionManager.h"
+#include "HttpClientManager.h"
 #include "SourceManager.h"
 #include "DashHttp.h"
 //#include "DisplayHandover.h"
@@ -89,7 +90,7 @@ std::string Control::adaptationConfiguration = std::string();
 //int Control::height = 0;
 
 /* Download related stuff */
-Control::HttpMap Control::httpMap;
+//Control::HttpMap Control::httpMap;
 //Control::RequestMap Control::requestMap;
 
 /* Storage related */
@@ -240,9 +241,9 @@ void Control::cleanUp()
     }
 
     /* Stop downloader thread and clean-up */
-    for(HttpMap::iterator it = httpMap.begin(); it != httpMap.end(); ++it)
+    /*for(HttpMap::iterator it = httpMap.begin(); it != httpMap.end(); ++it)
         delete it->second;
-    httpMap.clear();
+    httpMap.clear();*/
     //Control::requestMap.clear();
 
     /* Main thread related stuff */
@@ -1144,11 +1145,11 @@ bool Control::processAction(const ControlLogicAction& _a)
     	break;
     }
 
-    case Action_CreateTcpConnection: {
+    /*case Action_CreateTcpConnection: {
         const ControlLogicActionOpenTcpConnection& a = dynamic_cast<const ControlLogicActionOpenTcpConnection&>(_a);
         result = processActionOpenTcpConnection(a);
         break;
-    }
+    }*/
 
     case Action_StartDownload: {
         const ControlLogicActionStartDownload& a = dynamic_cast<const ControlLogicActionStartDownload&>(_a);
@@ -1171,20 +1172,23 @@ bool Control::processActionCloseTcpConnection(const ControlLogicActionCloseTcpCo
 	return true;
 }
 
+#if 0
 bool Control::processActionOpenTcpConnection(const ControlLogicActionOpenTcpConnection& a)
 {
 	DashHttp* http = new DashHttp(a.tcpConnectionId, httpCb);
 	dp2p_assert(httpMap.insert(pair<int, DashHttp*>(a.tcpConnectionId, http)).second);
 	return true;
 }
+#endif
 
 bool Control::processActionStartDownload(const ControlLogicActionStartDownload& a)
 {
-	dp2p_assert(httpMap.find(a.tcpConnectionId) != httpMap.end());
+    DashHttp& http = HttpClientManager::get(a.tcpConnectionId);
+	//dp2p_assert(httpMap.find(a.tcpConnectionId) != httpMap.end());
 
 	DBGMSG("Processing action StartDownload with %d requests.", a.contentIds.size());
 
-	const TcpConnection& tc = TcpConnectionManager::get(a.tcpConnectionId);
+	const TcpConnection& tc = TcpConnectionManager::get(http.tcpConnectionId);
 	//const SourceData& sd = SourceManager::get(tc.srcId);
 
 	list<int> reqs;
@@ -1209,7 +1213,7 @@ bool Control::processActionStartDownload(const ControlLogicActionStartDownload& 
 	}
 
 	/* Register the request with the downloader */
-	if(httpMap.at(a.tcpConnectionId)->newRequest(reqs))
+	if(http.newRequest(reqs))
 	{
 		/* Over output if segment */
 		if(a.contentIds.front()->getType() == ContentType_Segment)
@@ -1297,10 +1301,13 @@ bool Control::eof()
 	return false;
 }
 
-void Control::closeConnection(const ConnectionId& connId)
+void Control::closeConnection(const TcpConnectionId& tcpConnectionId)
 {
-	delete httpMap.at(connId);
-	dp2p_assert(1 == httpMap.erase(connId));
+	//delete httpMap.at(connId);
+	//dp2p_assert(1 == httpMap.erase(connId));
+
+	HttpClientManager::destroy(tcpConnectionId);
+	TcpConnectionManager::get(tcpConnectionId).disconnect();
 }
 
 }

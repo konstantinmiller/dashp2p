@@ -28,6 +28,7 @@
 #include "ContentId.h"
 #include "Utilities.h"
 //using dashp2p::Utilities;
+#include "HttpClientManager.h"
 
 #include <string>
 #include <sstream>
@@ -51,16 +52,17 @@ public:
 class ControlLogicActionCloseTcpConnection: public ControlLogicAction
 {
 public:
-	ControlLogicActionCloseTcpConnection(const int& tcpConnectionId): ControlLogicAction(), tcpConnectionId(tcpConnectionId) {}
+	ControlLogicActionCloseTcpConnection(const TcpConnectionId& tcpConnectionId): ControlLogicAction(), tcpConnectionId(tcpConnectionId) {}
     virtual ~ControlLogicActionCloseTcpConnection(){}
     virtual ControlLogicAction* copy() const {return new ControlLogicActionCloseTcpConnection(tcpConnectionId);}
     virtual ControlLogicActionType getType() const {return Action_CloseTcpConnection;}
-    virtual string toString() const {ostringstream ret; ret << "CloseTcpConnection " << tcpConnectionId; return ret.str();}
+    virtual string toString() const {ostringstream ret; ret << "CloseTcpConnection " << (string)tcpConnectionId; return ret.str();}
 public:
-    const int tcpConnectionId;
+    const TcpConnectionId tcpConnectionId;
 };
 
 
+/*
 class ControlLogicActionOpenTcpConnection: public ControlLogicAction
 {
 public:
@@ -75,13 +77,13 @@ public:
     //const string hostName;
     //const int maxPendingRequests;
     //const int port = 80;
-};
+};*/
 
 
 class ControlLogicActionStartDownload: public ControlLogicAction
 {
 public:
-    ControlLogicActionStartDownload(const int& tcpConnectionId, list<const ContentId*> contentIds, list<dashp2p::URL> urls, list<HttpMethod> httpMethods)
+    ControlLogicActionStartDownload(const TcpConnectionId& tcpConnectionId, list<const ContentId*> contentIds, list<dashp2p::URL> urls, list<HttpMethod> httpMethods)
       : ControlLogicAction(), tcpConnectionId(tcpConnectionId), contentIds(contentIds), urls(urls), httpMethods(httpMethods) {}
     virtual ~ControlLogicActionStartDownload() {while(!contentIds.empty()){delete contentIds.front(); contentIds.pop_front();}}
     virtual ControlLogicAction* copy() const;
@@ -89,7 +91,7 @@ public:
     virtual string toString() const;
     virtual bool operator==(const ControlLogicActionStartDownload& other) const;
 public:
-    const int tcpConnectionId;
+    const TcpConnectionId tcpConnectionId;
     list<const ContentId*> contentIds;
     list<dashp2p::URL> urls;
     list<HttpMethod> httpMethods;

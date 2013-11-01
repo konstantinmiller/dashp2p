@@ -32,12 +32,25 @@ using std::pair;
 
 namespace dashp2p {
 
+// class TcpConnectionId
+class TcpConnectionId {
+public:
+    TcpConnectionId(const int& id = -1): id(id) {}
+    bool operator==(const TcpConnectionId& other) const {return other.id == id;}
+    bool operator!=(const TcpConnectionId& other) const {return !(other == *this);}
+    int numeric() const {return id;} // TODO: replace by casting operator
+    operator string() const {return std::to_string(id);}
+private:
+    int id;
+};
+
+// not thread safe
 class TcpConnection
 {
 public: /* public methods */
-	TcpConnection(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests);
+	TcpConnection(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout);
 	virtual ~TcpConnection();
-	void connect();
+	int connect(); // returns 0 of OK. Can be called again if fails.
 	void disconnect();
 	int read();
 	void write(string& s);
@@ -51,6 +64,7 @@ public: /* public fields */
 	const int port;
 	IfData ifData;
 	int maxPendingRequests;
+	const int64_t connectTimeout;
     int fdSocket;
     struct tcp_info lastTcpInfo;
     //int numConnectEvents;
@@ -70,9 +84,11 @@ class TcpConnectionManager
 {
 public:
 	static void cleanup();
-	static int create(const int& srcId, const int& port = 80, const IfData& ifData = IfData(), const int& maxPendingRequests = 0);
-	static TcpConnection& get(const int& connId) {return *connVec.at(connId);}
-	static void logTCPState(const int& connId, const char* reason);
+	// Creates a TCP connection in unconnected state
+	static int create(const int& srcId, const int& port = 80, const IfData& ifData = IfData(), const int& maxPendingRequests = 0, const int64_t& connectTimeout = 60000000);
+	static int connect(const int& connId) {return connVec.at(connId)->connect();}
+	static TcpConnection& get(const TcpConnectionId& tcpConnectionId) {return *connVec.at(tcpConnectionId.numeric());}
+	static void logTCPState(const TcpConnectionId& tcpConnectionId, const char* reason);
     static string tcpState2String(int tcpState);
     static string tcpCAState2String(int tcpCAState);
 
