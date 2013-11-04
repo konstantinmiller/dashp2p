@@ -36,11 +36,24 @@ namespace dashp2p {
 //int TcpConnectionId::nextId = 0;
 
 // static variables in TcpConnectionManager
-vector<TcpConnection*> TcpConnectionManager::connVec(1024);
+vector<TcpConnection*> TcpConnectionManager::connVec;
 
 TcpConnection::TcpConnection(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout)
-  : srcId(srcId), port(port), ifData(ifData), maxPendingRequests(maxPendingRequests), connectTimeout(connectTimeout), fdSocket(-1), lastTcpInfo(), /*numConnectEvents(0),*/
-    numReqsCompleted(0), keepAliveMaxRemaining(-1), keepAliveTimeoutNext(-1), aHdrReceived(false), recvBufContent(0), recvBuf(NULL), recvTimestamp(-1)
+  : srcId(srcId),
+    port(port),
+    ifData(ifData),
+    maxPendingRequests(maxPendingRequests),
+    connectTimeout(connectTimeout),
+    fdSocket(-1),
+    lastTcpInfo(),
+    /*numConnectEvents(0),*/
+    numReqsCompleted(0),
+    keepAliveMaxRemaining(-1),
+    keepAliveTimeoutNext(-1),
+    aHdrReceived(false),
+    recvBufContent(0),
+    recvBuf(NULL),
+    recvTimestamp(-1)
 {
     /* Open the socket. */
     // TODO: increase outoing buffer size to something around 1 MB or more
@@ -209,6 +222,10 @@ int TcpConnection::state() const
 int TcpConnectionManager::create(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout)
 {
 	TcpConnection* d = new TcpConnection(srcId, port, ifData, maxPendingRequests, connectTimeout);
+	if(connVec.capacity() == 0)
+	    connVec.reserve(1024);
+	else if(connVec.capacity() == connVec.size())
+	    connVec.reserve(2 * connVec.size());
 	connVec.push_back(d);
 	return connVec.size() - 1;
 }
