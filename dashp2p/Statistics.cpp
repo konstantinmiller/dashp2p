@@ -242,20 +242,18 @@ int Statistics::getLastRequest(const TcpConnectionId& tcpConnectionId)
 }
 
 // TODO: validate throughput calculations (no bugs noticed but just to be sure)
-double Statistics::getThroughput(const TcpConnectionId& tcpConnectionId, double delta, string devName)
+double Statistics::getThroughput(const TcpConnectionId& tcpConnectionId, int64_t delta, string devName)
 {
-    const double now = dashp2p::Utilities::now();
+    const int64_t now = dashp2p::Utilities::getTime();
 
     dp2p_assert(0 < httpRequests.count(tcpConnectionId.numeric()));
     list<int>& rsList = httpRequests.at(tcpConnectionId.numeric());
     dp2p_assert(!rsList.empty());
 
-    if(delta > now) {
-        //printf("delta = %17.17f, now = %17.17f\n", delta, now);fflush(NULL);
-        abort();
-    }
+    if(delta > now)
+        THROW_RUNTIME("Throughput requested at time %" PRId64 " for last %" PRId64 " [us].", now, delta);
 
-    double seconds = 0;
+    int64_t usec = 0;
     double bits = 0;
     std::list<int>::const_iterator it = --rsList.end();
     while(true)
@@ -263,22 +261,23 @@ double Statistics::getThroughput(const TcpConnectionId& tcpConnectionId, double 
         const int reqId = *it;
         if(devName.empty() || TcpConnectionManager::get(tcpConnectionId).ifData.name.compare(devName) == 0)
         {
-            const double startTime = HttpRequestManager::getTsSent(reqId);
-            const double complTime = HttpRequestManager::getTsLastByte(reqId);
-            const double bytes = HttpRequestManager::getContentLength(reqId);
+            const int64_t startTime = HttpRequestManager::getTsSent(reqId);
+            const int64_t complTime = HttpRequestManager::getTsLastByte(reqId);
+            const int64_t bytes = HttpRequestManager::getContentLength(reqId);
 
             if(complTime <= now - delta) {
                 break;
             } else if(startTime >= now - delta) {
                 bits += 8.0 * bytes;
-                seconds += complTime - startTime;
-                //dbgPrintf("Accounting for complete segment with %f bits from %f to %f.", 8.0 * bytes, startTime, complTime);
+                usec += complTime - startTime;
+                DBGMSG("Accounting for complete segment with %f bits from %" PRId64 " to %" PRId64 ".",
+                        8.0 * bytes, startTime, complTime);
             } else {
-                seconds += complTime - (now - delta);
-                bits += (8.0 * bytes) * (complTime - (now - delta)) / (complTime - startTime);
-                //dbgPrintf("Accounting for PART of the segment with %f (%f) bits from %f (%f) to %f.",
-                //        (8.0 * bytes) * (complTime - (now - delta)) / (complTime - startTime), 8.0 * bytes,
-                //        now - delta, startTime, complTime);
+                usec += complTime - (now - delta);
+                bits += (8.0 * bytes) * (double)(complTime - (now - delta)) / (double)(complTime - startTime);
+                DBGMSG("Accounting for PART of the segment with %f (%f) bits from %" PRId64 " (%" PRId64 ") to %" PRId64 ".",
+                        (8.0 * bytes) * (double)(complTime - (now - delta)) / (double)(complTime - startTime),
+                        8.0 * bytes, now - delta, startTime, complTime);
             }
         }
 
@@ -289,13 +288,13 @@ double Statistics::getThroughput(const TcpConnectionId& tcpConnectionId, double 
         }
     }
 
-    //dbgPrintf("In total: %f bits in %f seconds (%f Mbit/sec)", bits, seconds, bits / seconds / 1048576.0);
+    DBGMSG("In total: %f bits in %f seconds (%f Mbit/sec)", bits, usec / 1e6, bits / usec);
 
-    if(seconds) {
-        DBGMSG("Average segment throughput in [%f, %f] is %.3f Mbit/sec.", now - delta, now, bits / seconds / 1e6);
-        return bits / seconds;
+    if(usec) {
+        DBGMSG("Average segment throughput in [%" PRId64 ", %" PRId64 "] is %.3f Mbit/sec.", now - delta, now, bits / usec);
+        return bits / (usec / 1e6);
     } else {
-        DBGMSG("Average segment throughput in [%f, %f] is 0 Mbit/sec.", now - delta, now);
+        DBGMSG("Average segment throughput in [%" PRId64 ", %" PRId64 "] is 0 Mbit/sec.", now - delta, now);
         return 0;
     }
 }
@@ -307,7 +306,7 @@ double Statistics::getThroughputLastRequest(const TcpConnectionId& tcpConnection
     dp2p_assert(!rsList.empty());
 
     const int reqId = rsList.back();
-    return (8.0 * HttpRequestManager::getContentLength(reqId)) / (HttpRequestManager::getTsLastByte(reqId) - HttpRequestManager::getTsSent(reqId));
+    return (8.0 * HttpRequestManager::getContentLength(reqId)) / ((HttpRequestManager::getTsLastByte(reqId) - HttpRequestManager::getTsSent(reqId)) / 1e6);
 }
 
 // TODO: assumes that requests are received in chronological order. fails if this is not the case!
@@ -509,9 +508,9 @@ void Statistics::outputStatistics()
     			fprintf(fileRequestStatistics, " %s", HttpRequestManager::getContentId(reqId).toString().c_str());
     			fprintf(fileRequestStatistics, " %s", SourceManager::get(TcpConnectionManager::get(tcpConnId).srcId).hostName.c_str());
     			fprintf(fileRequestStatistics, " %s", HttpRequestManager::getFileName(reqId).c_str());
-    			fprintf(fileRequestStatistics, " %" PRIu64, (int64_t)(1e6 * HttpRequestManager::getTsSent(reqId)) + dashp2p::Utilities::getReferenceTime());
-    			fprintf(fileRequestStatistics, " %" PRIu64, (int64_t)(1e6 * HttpRequestManager::getTsFirstByte(reqId)) + dashp2p::Utilities::getReferenceTime());
-    			fprintf(fileRequestStatistics, " %" PRIu64, (int64_t)(1e6 * HttpRequestManager::getTsLastByte(reqId)) + dashp2p::Utilities::getReferenceTime());
+    			fprintf(fileRequestStatistics, " %" PRId64, HttpRequestManager::getTsSent(reqId) + dashp2p::Utilities::getReferenceTime());
+    			fprintf(fileRequestStatistics, " %" PRId64, HttpRequestManager::getTsFirstByte(reqId) + dashp2p::Utilities::getReferenceTime());
+    			fprintf(fileRequestStatistics, " %" PRId64, HttpRequestManager::getTsLastByte(reqId) + dashp2p::Utilities::getReferenceTime());
     			fprintf(fileRequestStatistics, " %" PRId64, HttpRequestManager::getContentLength(reqId));
     			fprintf(fileRequestStatistics, " %d", HttpRequestManager::getHdr(reqId).keepAliveMax);
     			fprintf(fileRequestStatistics, " %u", HttpRequestManager::isSentPipelined(reqId) ? 1 : 0);
@@ -592,7 +591,7 @@ void Statistics::outputStatistics()
     }
 }
 
-void Statistics::recordAdaptationDecision(double relTime, int64_t beta, double rho, double rhoLast, int r_last, int r_new, int64_t Bdelay, bool betaMinIncreasing, int reason)
+void Statistics::recordAdaptationDecision(int64_t relTime, int64_t beta, double rho, double rhoLast, int r_last, int r_new, int64_t Bdelay, bool betaMinIncreasing, int reason)
 {
     if(logDir.empty() || !logAdaptationDecision)
         return;
@@ -603,7 +602,7 @@ void Statistics::recordAdaptationDecision(double relTime, int64_t beta, double r
     //fprintf(fileAdaptationDecision, "% 17.6f s | % 17.6f s | % 17.6f Mbps | % 17.6f Mbps | %9d bps | %9d bps | % 3.6f s | % 4d\n",
     //        relTime, beta / 1e6, rho / 1e6, rhoLast / 1e6, r_last, r_new, Bdelay / 1e6, reason);
 
-    fprintf(fileAdaptationDecision, "% 11.6f s | %9d bps -> %9d bps | % 11.6f s | %3d | % 11.6f s | % 10.6f Mbps | % 10.6f Mbps | %s\n",
+    fprintf(fileAdaptationDecision, "%20" PRId64 " s | %9d bps -> %9d bps | % 11.6f s | %3d | % 11.6f s | % 10.6f Mbps | % 10.6f Mbps | %s\n",
             relTime, r_last, r_new, std::min<double>(9999.0, Bdelay / 1e6), reason, beta / 1e6, rho / 1e6, rhoLast / 1e6, betaMinIncreasing ? "incr" : "decr");
 }
 
@@ -638,6 +637,17 @@ void Statistics::recordScalarDouble(const char* name, double value)
         	prepareFileScalarValues();
 
     fprintf(fileScalarValues, "    <%s value=\"%17.6f\" type=\"double\"></%s>\n", name, value, name);
+}
+
+void Statistics::recordScalarD64(const char* name, int64_t value)
+{
+    if(logDir.empty() || !logScalarValues)
+        return;
+
+    if(!fileScalarValues)
+            prepareFileScalarValues();
+
+    fprintf(fileScalarValues, "    <%s value=\"%" PRId64 "\" type=\"d64\"></%s>\n", name, value, name);
 }
 
 void Statistics::recordScalarU64(const char* name, uint64_t value)
@@ -825,6 +835,7 @@ void Statistics::recordSegmentSize(ContentIdSegment segId, int64_t bytes)
     fprintf(fileSegmentSizes, "%d %d %" PRId64 "\n", segId.bitRate(), segId.segmentIndex(), bytes);
 }
 
+#if 0
 void Statistics::recordP2PMeasurementToFile(string filePath, int segNr, int repId,
 		int sourceNNumber, double measuredBandwith , int mode, double actualFetchtime)
 {
@@ -846,6 +857,7 @@ void Statistics::recordP2PBufferlevelToFile(string filePath, int64_t availableCo
 	myfile << dashp2p::Utilities::getReferenceTime() << " " << dashp2p::Utilities::now() << " " << availableContigIntervalBytes << " " << availableContigIntervalTime << "\n";
 	myfile.close();
 }
+#endif
 
 bool operator==(const struct tcp_info& x, const struct tcp_info& y)
 {

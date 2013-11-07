@@ -513,9 +513,9 @@ void Control::httpCb(HttpEvent* _e)
 }
 
 #if WITH_OVERLAY_STATISTICS == 1
-void Control::displayThroughputOverlay(int segNr, double t, double thrpt)
+void Control::displayThroughputOverlay(int segNr, int64_t usec, double thrpt)
 #else
-void Control::displayThroughputOverlay(int /* segNr */, double /* t */, double thrpt)
+void Control::displayThroughputOverlay(int /* segNr */, int64_t /* usec */, double thrpt)
 #endif
 {
     /* overlay output */
@@ -534,7 +534,7 @@ void Control::displayThroughputOverlay(int /* segNr */, double /* t */, double t
         {
             static FILE* f = NULL;
             if(!f) f = fopen("/tmp/dp2p_throughput.txt", "w");
-            fprintf(f, "%8.2f %5d %8.2f\n", t, segNr, thrpt / 1e6);
+            fprintf(f, "%" PRId64 " %5d %8.2f\n", usec, segNr, thrpt / 1e6);
             fflush(f);
         }
 #endif
@@ -674,11 +674,11 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 	DBGMSG("Got (piece of) a segment with ContentId: %s.", HttpRequestManager::getContentId(e.reqId).toString().c_str());
 
 	switch(state) {
-	case ControlState_Initializing: ERRMSG("[%.3fs] Enter. State: Initializing.", dashp2p::Utilities::now()); exit(1);
+	case ControlState_Initializing: ERRMSGWT("Enter. State: Initializing."); exit(1);
 	case ControlState_Playing: DBGMSG("Enter. State: Playing."); break;
 	//case ControlState_Paused: DBGMSG("Enter. State: Paused."); break;
 	case ControlState_Terminating: DBGMSG("Enter. State: Terminating."); return;
-	case ControlState_Dead: ERRMSG("[%.3fs] Enter. State: Dead.", dashp2p::Utilities::now()); return;
+	case ControlState_Dead: ERRMSGWT("Enter. State: Dead."); return;
 	default: dp2p_assert(0); break;
 	}
 
@@ -1204,7 +1204,7 @@ bool Control::processActionStartDownload(const ControlLogicActionStartDownload& 
 		reqs.push_back(reqId);
 
 		if((*it)->getType() == ContentType_Mpd)
-			Statistics::recordScalarDouble("startDownloadMPD", dashp2p::Utilities::now());
+			Statistics::recordScalarD64("startDownloadMPD", dashp2p::Utilities::getTime());
 
 		DBGMSG("Starting request nr. %d: %s over interface %s.\n", reqId, (*it)->toString().c_str(),
 				tc.getIfString().c_str());

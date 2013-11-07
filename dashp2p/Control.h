@@ -92,7 +92,7 @@ public:
     //static void receiveDisplayHandover(const std::string& mpdUrl, int64_t startPosition, int64_t startTime);
 
     /* Overlay related stuff */
-    static void displayThroughputOverlay(int segNr, double t, double thrpt);
+    static void displayThroughputOverlay(int segNr, int64_t usec, double thrpt);
 
     static void toFile (ContentIdSegment segId, string& fileName){storage->toFile(segId,fileName);};
 

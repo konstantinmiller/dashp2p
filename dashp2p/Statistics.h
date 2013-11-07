@@ -69,12 +69,12 @@ public:
     static int getLastRequest(const TcpConnectionId& tcpConnectionId);
     /* Note: Does not consider the last segment. So, the result is only valid if called directly after a request is completed
      * and the request data were passed to the Statistics module. */
-    static double getThroughput(const TcpConnectionId& tcpConnectionId, double delta, string devName = "");
+    static double getThroughput(const TcpConnectionId& tcpConnectionId, int64_t delta, string devName = "");
     static double getThroughputLastRequest(const TcpConnectionId& tcpConnectionId); // [bit/s]
     static std::vector<double> getReceivedBytes(const TcpConnectionId& tcpConnectionId, std::vector<double> tVec);
     static void outputStatistics();
 
-    static void recordAdaptationDecision(double relTime, int64_t beta, double rho, double rhoLast, int r_last, int r_new, int64_t Bdelay, bool betaMinIncreasing, int reason);
+    static void recordAdaptationDecision(int64_t relTime, int64_t beta, double rho, double rhoLast, int r_last, int r_new, int64_t Bdelay, bool betaMinIncreasing, int reason);
 
     static void recordGiveDataToVlc(int64_t relTime, int64_t usec, int64_t bytes);
 
@@ -83,6 +83,7 @@ public:
      */
     static void recordScalarString(const char* name, const char* value);
     static void recordScalarDouble(const char* name, double value);
+    static void recordScalarD64(const char* name, int64_t value);
     static void recordScalarU64(const char* name, uint64_t value);
 
     //static void recordTcpState(const char* reason, const struct tcp_info& tcpInfo);
@@ -94,10 +95,10 @@ public:
 
     static void recordSegmentSize(ContentIdSegment segId, int64_t bytes);
 
-    static void recordP2PMeasurementToFile(string filePath, int segNr, int repId, int sourceNNumber,
-    			double measuredBandwith , int mode, double actualFetchtime);
-    static void recordP2PBufferlevelToFile(string filePath,
-    			int64_t availableContigIntervalTime , int64_t availableContigIntervalBytes);
+    //static void recordP2PMeasurementToFile(string filePath, int segNr, int repId, int sourceNNumber,
+    //			double measuredBandwith , int mode, double actualFetchtime);
+    //static void recordP2PBufferlevelToFile(string filePath,
+    //			int64_t availableContigIntervalTime , int64_t availableContigIntervalBytes);
 
 /* Private methods */
 private:

@@ -146,11 +146,6 @@ std::string Utilities::getTimeString(const struct timespec& t, bool showDate)
     return std::string(buf);
 }
 
-double Utilities::now()
-{
-    return getTime() / 1e6;
-}
-
 int64_t Utilities::convertTime2Epoch(const string& str)
 {
     int h = -1;

@@ -202,7 +202,7 @@ static int Open( vlc_object_t *p_this )
     {
     	const bool logTcpState = var_InheritBool(p_this, "dashp2p-log-tcp");
     	const bool logScalarValues = true;
-    	const bool logAdaptationDecision = false;
+    	const bool logAdaptationDecision = true;
     	const bool logGiveDataToVlc = false;
     	const bool logBytesStored = true;
     	const bool logSecStored = true;
@@ -457,7 +457,7 @@ ssize_t read(access_t* /*p_access*/, uint8_t* buffer, size_t size)
     }
 
     if(_state == READ_INIT) {
-        Statistics::recordScalarDouble("startGiveDataToVLC", dashp2p::Utilities::now());
+        Statistics::recordScalarD64("startGiveDataToVLC", dashp2p::Utilities::getTime());
     }
 
     _state = READ_OK;

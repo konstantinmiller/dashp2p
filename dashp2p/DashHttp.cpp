@@ -770,7 +770,7 @@ bool DashHttp::checkStartNewRequests()
         if(sd.keepAliveMax != -1) // design choice: send unlimited num of requests if don't know servers limit
             --tc.keepAliveMaxRemaining;
         // TODO: might want to improve precision of this time stamp by moving it into sendHttpRequest() (but is not trivial)
-        HttpRequestManager::setTsSent(reqId, Utilities::now());
+        HttpRequestManager::setTsSent(reqId, Utilities::getTime());
         HttpRequestManager::setSentPipelined(reqId, (it == reqQueue.begin()) ? false : true);
         if(tc.maxPendingRequests > 0 && numPending + (int)reqsToSend.size() == tc.maxPendingRequests)
             break;
@@ -837,7 +837,7 @@ void DashHttp::updateTcpInfo()
 }
 #endif
 
-int DashHttp::parseData(const char* p, int size, int reqId, double recvTimestamp)
+int DashHttp::parseData(const char* p, int size, int reqId, int64_t recvTimestamp)
 {
 	dp2p_assert(p && size > 0 && !HttpRequestManager::isCompleted(reqId));
 

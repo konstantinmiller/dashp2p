@@ -148,7 +148,7 @@ int TcpConnection::read()
 	dp2p_assert_v(recvBufContent < (int)recvBufSize, "recvBufContent: %d, recvBufSize: %u", recvBufContent, recvBufSize);
 
 	recvBuf[recvBufContent] = 0;
-	recvTimestamp = Utilities::now();
+	recvTimestamp = Utilities::getTime();
 
 	/* Check the health of the socket and log TCP state. */
 	//assertSocketHealth();

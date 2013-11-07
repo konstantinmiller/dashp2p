@@ -81,7 +81,7 @@ public:
     virtual ~ControlLogicST();
     virtual ControlType getType() const {return ControlType_ST;}
 
-    double get_Delta_t() const {return Delta_t;}
+    //int64_t get_Delta_t() const {return Delta_t;}
 
 /* Private types */
 private:
@@ -125,7 +125,7 @@ private:
     double alfa3;
     double alfa4;
     double alfa5;
-    double Delta_t;
+    int64_t Delta_t;
     int fetchHeads;
 
     TimeSeries<int64_t>* betaTimeSeries;

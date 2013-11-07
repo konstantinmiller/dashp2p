@@ -109,7 +109,6 @@ public:
     static int64_t getAbsTime();
     static std::string getTimeString(int64_t t = 0, bool showDate = true);
     static std::string getTimeString(const struct timespec& t, bool showDate = true);
-    static double now();
     static void setReferenceTime() {/* dp2p_assert(referenceTime==0); */ referenceTime = getTime();} // TODO: hanle nicely!
     static int64_t getReferenceTime() {return referenceTime;}
     static int64_t convertTime2Epoch(const string& str);

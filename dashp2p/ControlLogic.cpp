@@ -359,7 +359,7 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 #endif
 
 	/* Logging. */
-	Statistics::recordScalarDouble("completedDownloadMPD", dashp2p::Utilities::now());
+	Statistics::recordScalarD64("completedDownloadMPD", dashp2p::Utilities::getTime());
 
 	/* Parse MPD */
 	mpdWrapper = new MpdWrapper(mpdDataField->getCopy((char*)malloc(mpdDataField->getReservedSize() * sizeof(char)), mpdDataField->getReservedSize()), mpdDataField->getReservedSize()); // we reserve this memory with malloc since it will be freed by the VLC XML plugin which uses free()
@@ -369,7 +369,7 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 
 	/* Logging. */
 	DBGMSG("Parsed MPD file.");
-	Statistics::recordScalarDouble("parsedMPD", dashp2p::Utilities::now());
+	Statistics::recordScalarD64("parsedMPD", dashp2p::Utilities::getTime());
 	Statistics::recordScalarDouble("videoDuration", mpdWrapper->getVideoDuration() / 1e6);
 
 	/* Give MPD to the Statistics module */

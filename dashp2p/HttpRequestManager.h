@@ -156,9 +156,9 @@ private:
 		char* pldBytes; // TODO: make pldBytes pointing directly into SegmentStorage in order to avoid copying
 		DownloadProcess* downloadProcess; // ([us],[byte])
 
-		double tsSent;
-		double tsFirstByte;
-		double tsLastByte;
+		int64_t tsSent;
+		int64_t tsFirstByte;
+		int64_t tsLastByte;
 
 	private:
 		const ContentId* const contentId;

@@ -12,7 +12,7 @@
 namespace dashp2p {
 
 // static variables in HttpClientManager
-HttpClientManager::HttpVec HttpClientManager::httpVec;
+HttpClientManager::HttpVec HttpClientManager::httpVec(1024, NULL);
 
 void HttpClientManager::cleanup()
 {
@@ -23,11 +23,6 @@ void HttpClientManager::cleanup()
 
 void HttpClientManager::create(const TcpConnectionId& id, const HttpCb& cb)
 {
-    if(httpVec.capacity() == 0)
-        httpVec.reserve(1024);
-    else if(httpVec.capacity() == httpVec.size())
-        httpVec.reserve(2 * httpVec.size());
-
     while(id.numeric() >= (int)httpVec.size())
         httpVec.resize(2 * httpVec.size(), NULL);
 

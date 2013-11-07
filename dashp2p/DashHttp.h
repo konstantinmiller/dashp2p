@@ -118,7 +118,7 @@ protected:
     bool checkStartNewRequests();
     /* Must only be called from checkStartNewRequests(). Must run in the main thread! */
     void sendHttpRequest(const list<int>& reqsToSend);
-    int parseData(const char* p, int size, const int reqId, double recvTimestamp);
+    int parseData(const char* p, int size, const int reqId, int64_t recvTimestamp);
     void parseHeader(const int reqId) const;
     //string serverState2String() const;
     //string connectionState2String() const;
