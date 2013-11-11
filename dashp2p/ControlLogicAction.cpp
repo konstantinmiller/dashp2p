@@ -24,6 +24,8 @@
 
 namespace dashp2p {
 
+int64_t ControlLogicAction::next_action_id = 0;
+
 ControlLogicAction* ControlLogicActionStartDownload::copy() const
 {
 	list<const ContentId*> contentIds_copy;

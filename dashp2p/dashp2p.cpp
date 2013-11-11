@@ -75,11 +75,6 @@ static ssize_t  read    ( access_t* p_access, uint8_t* buffer, size_t size );
  * Module descriptor
  *****************************************************************************/
 
-/* just to make Eclipse happy and prevent it from showing errors "cannot resolve MODULE_STRING". */
-#ifndef MODULE_STRING
-# define MODULE_STRING "dashp2p"
-#endif
-
 vlc_module_begin()
     set_shortname("dashp2p")
     set_description("MPEG-DASH (Dynamic Adaptive Streaming over HTTP)")

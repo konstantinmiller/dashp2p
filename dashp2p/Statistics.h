@@ -61,8 +61,8 @@ public:
     static void setMpdWrapper(const MpdWrapper* mpdWrapper) {Statistics::mpdWrapper = mpdWrapper;}
 
     /* TCP connections */
-    static int32_t registerTcpConnection();
-    static void unregisterTcpConnection(const int32_t tcpConnId);
+    //static int32_t registerTcpConnection();
+    static void unregisterTcpConnection(const TcpConnectionId& tcpConnectionId);
 
     static void recordRequestStatistics(const TcpConnectionId& tcpConnectionId, int reqId);
     static int numCompletedRequests(const TcpConnectionId& tcpConnectionId);

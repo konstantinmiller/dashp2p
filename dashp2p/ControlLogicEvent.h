@@ -94,13 +94,15 @@ public:
 class ControlLogicEventDataReceived: public ControlLogicEvent
 {
 public:
-    ControlLogicEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo, pair<int64_t, int64_t> availableContigInterval)
+    ControlLogicEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo,
+            pair<int64_t, int64_t> availableContigInterval, bool socketDisconnected)
       : ControlLogicEvent(),
         tcpConnectionId(tcpConnectionId),
         reqId(reqId),
         byteFrom(byteFrom),
         byteTo(byteTo),
-        availableContigInterval(availableContigInterval)
+        availableContigInterval(availableContigInterval),
+        socketDisconnected(socketDisconnected)
     {}
     virtual ~ControlLogicEventDataReceived() {}
     virtual ControlLogicEventType getType() const {return Event_DataReceived;}
@@ -111,19 +113,20 @@ public:
     const int64_t byteFrom;
     const int64_t byteTo;
     const pair<int64_t, int64_t> availableContigInterval;
+    const bool socketDisconnected;
 };
 
 
 class ControlLogicEventDisconnect: public ControlLogicEvent
 {
 public:
-	ControlLogicEventDisconnect(const TcpConnectionId& tcpConnectionId, list<int> reqs): tcpConnectionId(tcpConnectionId), reqs(reqs) {}
+	ControlLogicEventDisconnect(const TcpConnectionId& tcpConnectionId): tcpConnectionId(tcpConnectionId) {}
     virtual ~ControlLogicEventDisconnect() {}
     virtual ControlLogicEventType getType() const {return Event_Disconnect;}
 
 public:
     const TcpConnectionId tcpConnectionId;
-    const list<int> reqs;
+    //const list<int> reqs;
 };
 
 

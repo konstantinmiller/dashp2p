@@ -76,6 +76,8 @@ public:
 
     int hasRequests();
 
+    list<int> clearUnfinishedRequests();
+
     //string getIfName() const {return ifData.name;}
     //string getIfAddr() const {return ifData.printAddress();}
     //string getIfString() const {return ifData.toString();}
@@ -110,7 +112,7 @@ protected:
 
     /***** HTTP related stuff *****/
     //void readFromSocket(int bytesExpected);
-    void processNewData();
+    void processNewData(bool socketDisconnected);
     void requeuePendingRequests(int numAllowed);
     /* Check if new requests can be send and send the appropriate number of them.
      * Must run in the main thread!

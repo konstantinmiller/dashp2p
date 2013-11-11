@@ -76,14 +76,14 @@ protected:
     //virtual list<ControlLogicAction*> processEventDataReceivedMpdPeer (ControlLogicEventDataReceived& e)         = 0;
     virtual list<ControlLogicAction*> processEventDataReceivedSegment (ControlLogicEventDataReceived& e)         = 0;
     //virtual list<ControlLogicAction*> processEventDataReceivedTracker (ControlLogicEventDataReceived& e)         = 0;
-    //virtual list<ControlLogicAction*> processEventDisconnect          (const ControlLogicEventDisconnect& e)     = 0;
+    virtual list<ControlLogicAction*> processEventDisconnect          (const ControlLogicEventDisconnect& e)     = 0;
     //virtual list<ControlLogicAction*> processEventPause               (const ControlLogicEventPause& e)          = 0;
     //virtual list<ControlLogicAction*> processEventResumePlayback      (const ControlLogicEventResumePlayback& e) = 0;
     virtual list<ControlLogicAction*> processEventStartPlayback       (const ControlLogicEventStartPlayback& e)  = 0;
 
     //virtual bool ackActionConnected        (const ConnectionId& connId);
     virtual bool ackActionRequestCompleted (const ContentId& contentId);
-    virtual bool ackActionDisconnect       (const ConnectionId& connId);
+    //virtual bool ackActionDisconnect       (const TcpConnectionId& tcpConnectionId);
 
     //virtual list<ControlLogicAction*> actionRejectedStartDownload(ControlLogicActionStartDownload* a) = 0;
 

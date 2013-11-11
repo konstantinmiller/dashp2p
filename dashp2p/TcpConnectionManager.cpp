@@ -38,7 +38,7 @@ namespace dashp2p {
 // static variables in TcpConnectionManager
 vector<TcpConnection*> TcpConnectionManager::connVec;
 
-TcpConnection::TcpConnection(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout)
+TcpConnection::TcpConnection(const SourceId& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout)
   : srcId(srcId),
     port(port),
     ifData(ifData),
@@ -52,7 +52,7 @@ TcpConnection::TcpConnection(const int& srcId, const int& port, const IfData& if
     keepAliveTimeoutNext(-1),
     aHdrReceived(false),
     recvBufContent(0),
-    recvBuf(NULL),
+    recvBuf(nullptr),
     recvTimestamp(-1)
 {
     /* Open the socket. */
@@ -107,26 +107,6 @@ int TcpConnection::connect()
 	DBGMSG("Socket snd buf size: %d, socket rcv buf size: %d.", socketBufferLengths.first,socketBufferLengths.second);
 
 	return 0;
-}
-
-void TcpConnection::disconnect()
-{
-	if(fdSocket > 0) {
-	    if(shutdown(fdSocket, SHUT_RDWR)) {
-	        char _errBuf[1024];
-	        char *errBuf = strerror_r(errno, _errBuf, sizeof(_errBuf)); // get the error string
-	        WARNMSG("Could not propertly shutdown() socket to %s: %s.", SourceManager::get(srcId).hostName.c_str(), errBuf);
-	    }
-		if(close(fdSocket)) {
-		    char _errBuf[1024];
-		    char *errBuf = strerror_r(errno, _errBuf, sizeof(_errBuf)); // get the error string
-		    WARNMSG("Could not propertly close() socket to %s: %s.", SourceManager::get(srcId).hostName.c_str(), errBuf);
-		}
-		fdSocket = -2;
-	}
-
-	delete [] recvBuf;
-	recvBuf = NULL;
 }
 
 int TcpConnection::read()
@@ -219,7 +199,7 @@ int TcpConnection::state() const
 	return lastTcpInfo.tcpi_state;
 }
 
-int TcpConnectionManager::create(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout)
+int TcpConnectionManager::create(const SourceId& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout)
 {
 	TcpConnection* d = new TcpConnection(srcId, port, ifData, maxPendingRequests, connectTimeout);
 	if(connVec.capacity() == 0)
@@ -235,6 +215,13 @@ void TcpConnectionManager::cleanup()
 	for(std::size_t i = 0; i < connVec.size(); ++i)
 		delete connVec.at(i);
 	connVec.clear();
+}
+
+void TcpConnectionManager::disconnect(const TcpConnectionId& tcpConnectionId)
+{
+    delete connVec.at(tcpConnectionId.numeric());
+    connVec.at(tcpConnectionId.numeric()) = nullptr;
+    Statistics::unregisterTcpConnection(tcpConnectionId);
 }
 
 void TcpConnectionManager::logTCPState(const TcpConnectionId& tcpConnectionId, const char* reason)
@@ -277,6 +264,26 @@ string TcpConnectionManager::tcpCAState2String(int tcpCAState)
         dp2p_assert(0);
         return string();
     }
+}
+
+void TcpConnection::disconnect()
+{
+    if(fdSocket > 0) {
+        if(shutdown(fdSocket, SHUT_RDWR)) {
+            char _errBuf[1024];
+            char *errBuf = strerror_r(errno, _errBuf, sizeof(_errBuf)); // get the error string
+            WARNMSG("Could not propertly shutdown() socket to %s: %s.", SourceManager::get(srcId).hostName.c_str(), errBuf);
+        }
+        if(close(fdSocket)) {
+            char _errBuf[1024];
+            char *errBuf = strerror_r(errno, _errBuf, sizeof(_errBuf)); // get the error string
+            WARNMSG("Could not propertly close() socket to %s: %s.", SourceManager::get(srcId).hostName.c_str(), errBuf);
+        }
+        fdSocket = -2;
+    }
+
+    delete [] recvBuf;
+    recvBuf = nullptr;
 }
 
 } /* namespace dashp2p */

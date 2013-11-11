@@ -31,6 +31,18 @@ using std::string;
 
 namespace dashp2p {
 
+// class SourceId
+class SourceId {
+public:
+    SourceId(const int& id = -1): id(id) {}
+    bool operator==(const SourceId& other) const {return other.id == id;}
+    bool operator!=(const SourceId& other) const {return !(other == *this);}
+    int numeric() const {return id;} // TODO: replace by casting operator
+    operator string() const {return std::to_string(id);}
+private:
+    int id;
+};
+
 class SourceData
 {
 public: /* public methods */
@@ -49,8 +61,8 @@ class SourceManager
 public:
 	static void cleanup();
 	static int add(const string& hostName, const int& port = 80);
-	static SourceData& get(const int& srcId) {return *srcVec.at(srcId);}
-	static string sourceState2String(const int& srcId);
+	static SourceData& get(const SourceId& srcId) {return *srcVec.at(srcId.numeric());}
+	static string sourceState2String(const SourceId& srcId);
 
 private:
 	SourceManager(){}

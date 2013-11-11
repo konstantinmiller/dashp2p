@@ -199,17 +199,17 @@ int32_t Statistics::registerTcpConnection()
 	const int32_t tcpConnId = ++lastTcpConnectionId;
 	return tcpConnId;
 }
+#endif
 
-void Statistics::unregisterTcpConnection(const int32_t tcpConnId)
+void Statistics::unregisterTcpConnection(const TcpConnectionId& tcpConnectionId)
 {
-	if(0 != filesTcpState.count(tcpConnId)) {
-		if(filesTcpState.at(tcpConnId) != NULL) {
-			dp2p_assert(0 == fclose(filesTcpState.at(tcpConnId)));
+	if(0 != filesTcpState.count(tcpConnectionId.numeric())) {
+		if(filesTcpState.at(tcpConnectionId.numeric()) != NULL) {
+			dp2p_assert(0 == fclose(filesTcpState.at(tcpConnectionId.numeric())));
 		}
-		filesTcpState.erase(tcpConnId);
+		filesTcpState.erase(tcpConnectionId.numeric());
 	}
 }
-#endif
 
 // fixme: change the usage of this functions. is should not be necessary to call it explicitely. all dat amust go statistics immediately.
 void Statistics::recordRequestStatistics(const TcpConnectionId& tcpConnectionId, int reqId)

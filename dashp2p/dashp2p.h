@@ -37,6 +37,11 @@ using std::string;
 using std::pair;
 using std::ostringstream;
 
+/* just to make Eclipse happy and prevent it from showing errors "cannot resolve MODULE_STRING". */
+#ifndef MODULE_STRING
+# define MODULE_STRING "dashp2p"
+#endif
+
 namespace dashp2p {
 
 /* HTTP status codes. */
@@ -45,7 +50,7 @@ enum HTTPStatusCode {HTTP_STATUS_CODE_UNDEFINED = 0, HTTP_STATUS_CODE_OK = 200, 
 /* HTTP methods */
 enum HttpMethod {HttpMethod_GET, HttpMethod_HEAD};
 
-enum HttpEventType {HttpEvent_DataReceived, HttpEvent_Disconnect, HttpEvent_Connected};
+enum HttpEventType {HttpEvent_DataReceived, HttpEvent_Disconnect /*, HttpEvent_Connected*/};
 
 /* Segment type */
 enum DASHSegmentType {SEG_MPD, SEG_REG, SEG_INIT};
@@ -55,7 +60,7 @@ class HttpEvent;
 typedef void(*HttpCb)(HttpEvent* e);
 
 /* Connection ID */
-typedef int ConnectionId;
+//typedef int ConnectionId;
 
 /* Interface information */
 class IfData {
@@ -94,7 +99,7 @@ enum ControlLogicEventType {
 };
 
 enum ControlLogicActionType {
-	Action_CloseTcpConnection,
+	//Action_CloseTcpConnection,
 	//Action_CreateTcpConnection,
 	//Action_FetchHead,
 	Action_StartDownload,

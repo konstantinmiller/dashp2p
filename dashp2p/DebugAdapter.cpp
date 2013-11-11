@@ -21,12 +21,14 @@
  ****************************************************************************/
 
 //#include "Dashp2pTypes.h"
-#include <cstdio>
-#include <cstdarg>
-#include <assert.h>
+#include "dashp2p.h"
 #include "DebugAdapter.h"
 #include "ThreadAdapter.h"
 #include "Utilities.h"
+
+#include <cstdio>
+#include <cstdarg>
+#include <assert.h>
 #ifdef __ANDROID__
 # include <android/log.h>
 #endif
@@ -73,7 +75,7 @@ void DebugAdapter::init(DebuggingLevel debuggingLevel, vlc_object_t* dashp2pPlug
     DebugAdapter::dashp2pPluginObject = dashp2pPluginObject;
 
     if(dbgFileName != NULL) {
-        f = fopen(dbgFileName, "wx");
+        f = fopen(dbgFileName, "w");
         if(!f)
             THROW_RUNTIME("Could not open file %s.", dbgFileName);
     }
@@ -123,6 +125,8 @@ void DebugAdapter::throwRuntime(const char* fileName, const char* functionName, 
 	cnt += std::vsprintf(buf + cnt, message, argList);
 	cnt += std::sprintf(buf + cnt, "\n");
 	va_end(argList);
+	//msg_GenericVa( dashp2pPluginObject, VLC_MSG_ERR, "DASHP2P", "%s", buf);
+	msg_Err(dashp2pPluginObject, "%s", buf);
 
     throw std::runtime_error(buf);
 }

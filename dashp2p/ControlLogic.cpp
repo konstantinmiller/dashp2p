@@ -99,13 +99,13 @@ list<ControlLogicAction*> ControlLogic::processEvent(ControlLogicEvent* e)
     	break;
     }
 
-    /*case Event_Disconnect: {
+    case Event_Disconnect: {
     	const ControlLogicEventDisconnect& event = dynamic_cast<const ControlLogicEventDisconnect&>(*e);
     	actions = processEventDisconnect(event);
     	break;
     }
 
-    case Event_Pause: {
+    /*case Event_Pause: {
     	dp2p_assert(state == HAVE_MPD);
     	const ControlLogicEventPause& event = dynamic_cast<const ControlLogicEventPause&>(*e);
     	actions = processEventPause(event);
@@ -126,8 +126,7 @@ list<ControlLogicAction*> ControlLogic::processEvent(ControlLogicEvent* e)
     }
 
     default:
-        ERRMSG("Got unexpected event: %s.", e->toString().c_str());
-        throw std::runtime_error("Got unexpected event in ControlLogic.");
+        THROW_RUNTIME("Got unexpected event: %s.", e->toString().c_str());
     }
 
     delete e;
@@ -310,7 +309,7 @@ bool ControlLogic::ackActionRequestCompleted (const ContentId& contentId)
 	return ret;
 }
 
-bool ControlLogic::ackActionDisconnect (const ConnectionId& connId)
+/*bool ControlLogic::ackActionDisconnect (const TcpConnectionId& tcpConnectionId)
 {
 	int ret = 0;
 	for(ActionList::iterator it = pendingActions.begin(); it != pendingActions.end(); )
@@ -318,7 +317,7 @@ bool ControlLogic::ackActionDisconnect (const ConnectionId& connId)
 		ControlLogicAction* _a = *it;
 		if(_a->getType() == Action_CloseTcpConnection) {
 			ControlLogicActionCloseTcpConnection* a = dynamic_cast<ControlLogicActionCloseTcpConnection*>(_a);
-			if(a->tcpConnectionId == connId) {
+			if(a->tcpConnectionId == tcpConnectionId) {
 				++ret;
 				delete a;
 				ActionList::iterator jt = it;
@@ -333,7 +332,7 @@ bool ControlLogic::ackActionDisconnect (const ConnectionId& connId)
 	}
 	DBGMSG("Removed %d actions from pending actions list. Pending: %d.", ret, pendingActions.size());
 	return ret;
-}
+}*/
 
 unsigned ControlLogic::getIndex(int bitrate)
 {

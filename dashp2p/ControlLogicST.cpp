@@ -75,7 +75,7 @@ ControlLogicST::ControlLogicST(int width, int height, const std::string& config)
     alfa4(0),
     alfa5(0),
     Delta_t(0),
-    betaTimeSeries(NULL),
+    betaTimeSeries(nullptr),
     initialIncrease(true),
     initialIncreaseTerminationTime(0),
     Bdelay(numeric_limits<int64_t>::max()),
@@ -107,7 +107,7 @@ ControlLogicST::ControlLogicST(int width, int height, const std::string& config)
 
 ControlLogicST::~ControlLogicST()
 {
-    delete betaTimeSeries; betaTimeSeries = NULL;
+    delete betaTimeSeries; betaTimeSeries = nullptr;
 }
 
 #if 0
@@ -136,8 +136,8 @@ list<ControlLogicAction*> ControlLogicST::processEventDataPlayed(const ControlLo
 
 	if(!delayedRequests.empty() && e.availableContigInterval.first <= Bdelay)
 	{
-		INFOMSG("[%" PRId64 "s] beta <= Bdelay (%.3g <= %.3g). Release %d delayed request(s).",
-		        dashp2p::Utilities::getTime(), e.availableContigInterval.first / 1e6, Bdelay / 1e6, delayedRequests.size());
+	    INFOMSGWT("beta <= Bdelay (%.3g <= %.3g). Release %d delayed request(s).",
+	            e.availableContigInterval.first / 1e6, Bdelay / 1e6, delayedRequests.size());
 		dp2p_assert(delayedRequests.size() == 1);
 		actions.push_back(createActionDownloadSegments(delayedRequests, tcpConnectionId, HttpMethod_GET));
 		delayedRequests.clear();
@@ -147,13 +147,14 @@ list<ControlLogicAction*> ControlLogicST::processEventDataPlayed(const ControlLo
 	return actions;
 }
 
+//TODO: handle e.socketDisconnected
 list<ControlLogicAction*> ControlLogicST::processEventDataReceivedMpd(ControlLogicEventDataReceived& e)
 {
 	DBGMSG("Event: %s.", e.toString().c_str());
 
 	list<ControlLogicAction*> actions;
 
-	if(mpdDataField == NULL) {
+	if(mpdDataField == nullptr) {
 		dp2p_assert(e.byteFrom == 0);
 		mpdDataField = new DataField(HttpRequestManager::getContentLength(e.reqId));
 		dp2p_assert(mpdDataField);
@@ -287,6 +288,22 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 	//actions.push_back(updateContour);
 	contour.setNext(*segNext);
 
+	/* re-connect if necessary */
+	if(e.socketDisconnected) {
+	    const list<int> unfinishedRequests = HttpClientManager::get(tcpConnectionId).clearUnfinishedRequests();
+	    assert(unfinishedRequests.empty());
+	    /* get source ID of the closed TCP connection */
+	    const SourceId srcId = TcpConnectionManager::get(e.tcpConnectionId).srcId;
+
+	    /* destroy HTTP client and disconnect TCP connection */
+	    HttpClientManager::destroy(tcpConnectionId);
+	    TcpConnectionManager::disconnect(tcpConnectionId);
+
+	    /* open new TCP connection and create new HTTP client */
+	    tcpConnectionId = TcpConnectionManager::create(srcId);
+	    HttpClientManager::create(tcpConnectionId, Control::httpCb);
+	}
+
 	/* Either request the next segment immediately or save it in delayedRequests */
 	if(e.availableContigInterval.first <= Bdelay) {
 		list<const ContentId*> contentIds;
@@ -299,33 +316,46 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 	return actions;
 }
 
-#if 0
+// TODO: make sure unfinished downloads are removed from the list of pending actions in ControlLogic
 list<ControlLogicAction*> ControlLogicST::processEventDisconnect(const ControlLogicEventDisconnect& e)
 {
 	DBGMSG("Event: %s.", e.toString().c_str());
 
-	dp2p_assert_v(e.connId == connId, "e.connId: %d, connId: %d", e.connId, connId);
+	dp2p_assert_v(e.tcpConnectionId == tcpConnectionId, "e.tcpConnectionId: %d, tcpConnectionId: %d", e.tcpConnectionId, tcpConnectionId);
 
-	list<ControlLogicAction*> actions;
-
-	if(0 == ackActionDisconnect(e.connId)) {
-		actions.push_back(new ControlLogicActionCloseTcpConnection(connId));
-	}
-
-	connId = Statistics::registerTcpConnection();
-
-	actions.push_back(new ControlLogicActionCreateTcpConnection(connId, IfData(), mpdUrl.hostName, 0));
-
+	/* get content IDs of unfinished requests */
+	const list<int> unfinishedRequests = HttpClientManager::get(tcpConnectionId).clearUnfinishedRequests();
 	list<const ContentId*> contentIds;
-	for(list<int>::const_iterator it = e.reqs.begin(); it != e.reqs.end(); ++it)
-		contentIds.push_back(HttpRequestManager::getContentId(*it).copy());
-	if(!contentIds.empty()) {
-		actions.push_back(createActionDownloadSegments(contentIds, connId, HttpMethod_GET));
-	}
+	for(list<int>::const_iterator it = unfinishedRequests.begin(); it != unfinishedRequests.end(); ++it)
+	    contentIds.push_back(HttpRequestManager::getContentId(*it).copy());
+
+	/* get source ID of the closed TCP connection */
+	const SourceId srcId = TcpConnectionManager::get(e.tcpConnectionId).srcId;
+
+	/* destroy HTTP client and disconnect TCP connection */
+	HttpClientManager::destroy(tcpConnectionId);
+	TcpConnectionManager::disconnect(tcpConnectionId);
+
+	/* open new TCP connection and create new HTTP client */
+	tcpConnectionId = TcpConnectionManager::create(srcId);
+	HttpClientManager::create(tcpConnectionId, Control::httpCb);
+
+	/* restart downloads of unfinished requests */
+	list<ControlLogicAction*> actions;
+	if(!contentIds.empty())
+	    actions.push_back(createActionDownloadSegments(contentIds, tcpConnectionId, HttpMethod_GET));
+
+	//if(0 == ackActionDisconnect(e.connId)) {
+	//	actions.push_back(new ControlLogicActionCloseTcpConnection(connId));
+	//}
+
+	//connId = Statistics::registerTcpConnection();
+
+	//actions.push_back(new ControlLogicActionCreateTcpConnection(connId, IfData(), mpdUrl.hostName, 0));
 
 	return actions;
 }
-#endif
+
 
 #if 0
 list<ControlLogicAction*> ControlLogicST::processEventPause(const ControlLogicEventPause& e)
@@ -510,7 +540,7 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
         double rho, double rhoLast, unsigned completedRequests, const ContentIdSegment& lastSegment)
 {
     /* debug output */
-    INFOMSG("Selecting representation. %s, beta: %.3g, rho: %.3g, rhoLast: %.3g, r_last: %.3g.",
+    INFOMSGWT("Selecting representation. %s, beta: %.3g, rho: %.3g, rhoLast: %.3g, r_last: %.3g.",
             ifBetaMinIncreasing ? "beta_min incr." : "beta_min decr.", beta, rho / 1e6, rhoLast / 1e6, lastSegment.bitRate() / 1e6);
 
     /* current time since beginning of download */

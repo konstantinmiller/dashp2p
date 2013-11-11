@@ -35,7 +35,7 @@ public:
 	HttpEvent(const TcpConnectionId& tcpConnectionId): tcpConnectionId(tcpConnectionId) {}
 	virtual ~HttpEvent(){}
 	virtual HttpEventType getType() const = 0;
-	virtual const TcpConnectionId& getConnId() const {return tcpConnectionId;}
+	//virtual const TcpConnectionId& getConnId() const {return tcpConnectionId;}
 
 	virtual string toString() const
 	{
@@ -49,7 +49,7 @@ public:
 			return string();
 		}
 	}
-private:
+//private:
 	const TcpConnectionId tcpConnectionId;
 };
 
@@ -66,11 +66,12 @@ public:
 class HttpEventDataReceived: public HttpEvent
 {
 public:
-	HttpEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo)
+	HttpEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo, bool socketDisconnected)
 	  : HttpEvent(tcpConnectionId),
 	    byteFrom(byteFrom),
 	    byteTo(byteTo),
-	    reqId(reqId) {}
+	    reqId(reqId),
+	    socketDisconnected(socketDisconnected) {}
 	virtual ~HttpEventDataReceived() {}
 	virtual HttpEventType getType() const {return HttpEvent_DataReceived;}
 
@@ -78,19 +79,16 @@ public:
 	const int64_t byteFrom;
 	const int64_t byteTo;
 	const int reqId;
-
+	const bool socketDisconnected;
 };
 
 
 class HttpEventDisconnect: public HttpEvent
 {
 public:
-	HttpEventDisconnect(const TcpConnectionId& tcpConnectionId, list<int> reqs): HttpEvent(tcpConnectionId), reqs(reqs) {}
+	HttpEventDisconnect(const TcpConnectionId& tcpConnectionId): HttpEvent(tcpConnectionId) {}
 	virtual ~HttpEventDisconnect(){}
 	virtual HttpEventType getType() const {return HttpEvent_Disconnect;}
-
-public:
-	const list<int> reqs;
 };
 
 }

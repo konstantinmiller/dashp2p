@@ -56,9 +56,9 @@ int SourceManager::add(const string& hostName, const int& port)
 	return srcVec.size() - 1;
 }
 
-string SourceManager::sourceState2String(const int& srcId)
+string SourceManager::sourceState2String(const SourceId& srcId)
 {
-	const SourceData& sd = *srcVec.at(srcId);
+	const SourceData& sd = *srcVec.at(srcId.numeric());
 
 	string ret;
 	char tmp[2048];

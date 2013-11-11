@@ -633,7 +633,7 @@ void Control::httpDataReceived_Mpd(HttpEventDataReceived& e)
 	ThreadAdapter::mutexLock(&eventsMutex);
 	dp2p_assert(HttpRequestManager::getHttpMethod(e.reqId) == HttpMethod_GET && state == ControlState_Playing && HttpRequestManager::getContentLength(e.reqId) > 0);
 	DBGMSG("Got (piece of) the MPD, ContentId: %s.", HttpRequestManager::getContentId(e.reqId).toString().c_str());
-	events.push_back(new ControlLogicEventDataReceived(e.getConnId(), e.reqId, e.byteFrom, e.byteTo, pair<int64_t, int64_t>(0,0)));
+	events.push_back(new ControlLogicEventDataReceived(e.tcpConnectionId, e.reqId, e.byteFrom, e.byteTo, pair<int64_t, int64_t>(0,0), e.socketDisconnected));
 	uint64_t buf = 1;
 	dp2p_assert(8 == write(fdEvents, &buf, 8));
 	DBGMSG("Added new ControlLogicEventDataReceived to the event list.");
@@ -670,6 +670,7 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 {
 	// TODO: This basically does two things: adds data to storage and notifies ControlLogic. Refactor by adding something like addDataToStorage()
 	// TODO: consider connecting HttpRequest to the storage directly to avoid one copying
+    // TODO: e.socketDisconnected in the middle of a segment download won't get propagated to ControlLogic. Need to handle.
 
 	DBGMSG("Got (piece of) a segment with ContentId: %s.", HttpRequestManager::getContentId(e.reqId).toString().c_str());
 
@@ -779,7 +780,7 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 	ThreadAdapter::mutexUnlock(&mutex);
 
 	ThreadAdapter::mutexLock(&eventsMutex);
-	events.push_back(new ControlLogicEventDataReceived(e.getConnId(), e.reqId, e.byteFrom, e.byteTo, availableContigInterval));
+	events.push_back(new ControlLogicEventDataReceived(e.tcpConnectionId, e.reqId, e.byteFrom, e.byteTo, availableContigInterval, e.socketDisconnected));
 	uint64_t buf = 1;
 	dp2p_assert(8 == write(fdEvents, &buf, 8));
 	DBGMSG("Added new ControlLogicEventDataReceived to the event list.");
@@ -825,7 +826,7 @@ void Control::httpDisconnect(const HttpEventDisconnect& e)
 #endif
 
 	//closeConnection(e.connId);
-	events.push_back(new ControlLogicEventDisconnect(e.getConnId(), e.reqs));
+	events.push_back(new ControlLogicEventDisconnect(e.tcpConnectionId));
 	uint64_t buf = 1;
 	dp2p_assert(8 == write(fdEvents, &buf, 8));
 	DBGMSG("Added new ControlLogicEventDisconnect to the event list.");
@@ -1139,11 +1140,11 @@ bool Control::processAction(const ControlLogicAction& _a)
     switch(_a.getType())
     {
 
-    case Action_CloseTcpConnection: {
+    /*case Action_CloseTcpConnection: {
     	const ControlLogicActionCloseTcpConnection& a = dynamic_cast<const ControlLogicActionCloseTcpConnection&>(_a);
     	result = processActionCloseTcpConnection(a);
     	break;
-    }
+    }*/
 
     /*case Action_CreateTcpConnection: {
         const ControlLogicActionOpenTcpConnection& a = dynamic_cast<const ControlLogicActionOpenTcpConnection&>(_a);
@@ -1166,11 +1167,11 @@ bool Control::processAction(const ControlLogicAction& _a)
     return result;
 }
 
-bool Control::processActionCloseTcpConnection(const ControlLogicActionCloseTcpConnection& a)
+/*bool Control::processActionCloseTcpConnection(const ControlLogicActionCloseTcpConnection& a)
 {
 	closeConnection(a.tcpConnectionId);
 	return true;
-}
+}*/
 
 #if 0
 bool Control::processActionOpenTcpConnection(const ControlLogicActionOpenTcpConnection& a)
@@ -1301,13 +1302,13 @@ bool Control::eof()
 	return false;
 }
 
-void Control::closeConnection(const TcpConnectionId& tcpConnectionId)
+/*void Control::closeConnection(const TcpConnectionId& tcpConnectionId)
 {
 	//delete httpMap.at(connId);
 	//dp2p_assert(1 == httpMap.erase(connId));
 
 	HttpClientManager::destroy(tcpConnectionId);
 	TcpConnectionManager::get(tcpConnectionId).disconnect();
-}
+}*/
 
 }

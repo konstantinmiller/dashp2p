@@ -103,7 +103,7 @@ private:
     //virtual list<ControlLogicAction*> processEventDataReceivedMpdPeer (ControlLogicEventDataReceived& /*e*/) {abort(); return list<ControlLogicAction*>();}
     virtual list<ControlLogicAction*> processEventDataReceivedSegment (ControlLogicEventDataReceived& e);
     //virtual list<ControlLogicAction*> processEventDataReceivedTracker (ControlLogicEventDataReceived& /*e*/) {abort(); return list<ControlLogicAction*>();}
-    //virtual list<ControlLogicAction*> processEventDisconnect          (const ControlLogicEventDisconnect& e);
+    virtual list<ControlLogicAction*> processEventDisconnect          (const ControlLogicEventDisconnect& e);
     //virtual list<ControlLogicAction*> processEventPause               (const ControlLogicEventPause& e);
     //virtual list<ControlLogicAction*> processEventResumePlayback      (const ControlLogicEventResumePlayback& e);
     virtual list<ControlLogicAction*> processEventStartPlayback       (const ControlLogicEventStartPlayback& e);

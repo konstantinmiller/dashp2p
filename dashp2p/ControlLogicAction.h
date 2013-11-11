@@ -42,14 +42,20 @@ namespace dashp2p {
 class ControlLogicAction
 {
 public:
+    ControlLogicAction(): action_id(next_action_id++) {}
     virtual ~ControlLogicAction(){}
     virtual ControlLogicAction* copy() const = 0;
     virtual ControlLogicActionType getType() const = 0;
     virtual string toString() const = 0;
+    virtual bool operator==(const ControlLogicAction& other) const {return action_id == other.action_id;}
+    virtual bool operator!=(const ControlLogicAction& other) const {return !(*this == other);}
+private:
+    static int64_t next_action_id;
+    int64_t action_id;
 };
 
 
-class ControlLogicActionCloseTcpConnection: public ControlLogicAction
+/*class ControlLogicActionCloseTcpConnection: public ControlLogicAction
 {
 public:
 	ControlLogicActionCloseTcpConnection(const TcpConnectionId& tcpConnectionId): ControlLogicAction(), tcpConnectionId(tcpConnectionId) {}
@@ -59,7 +65,7 @@ public:
     virtual string toString() const {ostringstream ret; ret << "CloseTcpConnection " << (string)tcpConnectionId; return ret.str();}
 public:
     const TcpConnectionId tcpConnectionId;
-};
+};*/
 
 
 /*

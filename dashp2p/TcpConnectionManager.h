@@ -24,6 +24,7 @@
 #define TCPCONNECTIONMANAGER_H_
 
 #include "dashp2p.h"
+#include "SourceManager.h"
 
 #include <netinet/tcp.h>
 #include <vector>
@@ -44,14 +45,15 @@ private:
     int id;
 };
 
+//class TcpConnectionManager;
+
 // not thread safe
 class TcpConnection
 {
 public: /* public methods */
-	TcpConnection(const int& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout);
+	TcpConnection(const SourceId& srcId, const int& port, const IfData& ifData, const int& maxPendingRequests, const int64_t& connectTimeout);
 	virtual ~TcpConnection();
 	int connect(); // returns 0 of OK. Can be called again if fails.
-	void disconnect();
 	int read();
 	void write(string& s);
 	void updateTcpInfo();
@@ -59,8 +61,10 @@ public: /* public methods */
 	pair<int,int> getSocketBufferLengths() const;
 	int state() const;
 	string getIfString() const {return ifData.toString();}
+private:
+	void disconnect();
 public: /* public fields */
-	const int srcId;
+	const SourceId srcId;
 	const int port;
 	IfData ifData;
 	int maxPendingRequests;
@@ -78,6 +82,9 @@ public: /* public fields */
     int recvBufContent;
     char* recvBuf;
     int64_t recvTimestamp;
+
+/* friends */
+    friend class TcpConnectionManager;
 };
 
 class TcpConnectionManager
@@ -85,8 +92,9 @@ class TcpConnectionManager
 public:
 	static void cleanup();
 	// Creates a TCP connection in unconnected state
-	static int create(const int& srcId, const int& port = 80, const IfData& ifData = IfData(), const int& maxPendingRequests = 0, const int64_t& connectTimeout = 60000000);
+	static int create(const SourceId& srcId, const int& port = 80, const IfData& ifData = IfData(), const int& maxPendingRequests = 0, const int64_t& connectTimeout = 60000000);
 	static int connect(const int& connId) {return connVec.at(connId)->connect();}
+	static void disconnect(const TcpConnectionId& tcpConnectionId);
 	static TcpConnection& get(const TcpConnectionId& tcpConnectionId) {return *connVec.at(tcpConnectionId.numeric());}
 	static void logTCPState(const TcpConnectionId& tcpConnectionId, const char* reason);
     static string tcpState2String(int tcpState);

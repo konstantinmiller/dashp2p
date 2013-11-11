@@ -110,7 +110,7 @@ protected:
     static void httpDisconnect(const HttpEventDisconnect& e);
 
     static bool processAction                   (const ControlLogicAction& a);
-    static bool processActionCloseTcpConnection (const ControlLogicActionCloseTcpConnection& a);
+    //static bool processActionCloseTcpConnection (const ControlLogicActionCloseTcpConnection& a);
     //static bool processActionOpenTcpConnection  (const ControlLogicActionOpenTcpConnection& a);
     static bool processActionStartDownload      (const ControlLogicActionStartDownload& a);
 
@@ -122,7 +122,7 @@ protected:
 
     static bool eof();
 
-    static void closeConnection(const TcpConnectionId& tcpConnectionId);
+    //static void closeConnection(const TcpConnectionId& tcpConnectionId);
 
 protected:
     //enum ControlState {ControlState_Initializing, ControlState_Playing, ControlState_PrepareToPause, ControlState_Paused, ControlState_Terminating, ControlState_Dead};
