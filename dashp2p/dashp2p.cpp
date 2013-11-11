@@ -272,6 +272,7 @@ static void Close( vlc_object_t *p_this )
     HttpClientManager::cleanup();
     TcpConnectionManager::cleanup();
     SourceManager::cleanup();
+    MpdWrapper::cleanup();
 
     DBGMSG("The End.");
 

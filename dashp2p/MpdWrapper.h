@@ -52,8 +52,9 @@ public:
 	 * @param p     Pointer to memory holding the MPD file. Will be deleted within this function.
 	 * @param size  Size of the MPD file.
 	 */
-    MpdWrapper(char* p, int size);
-    virtual ~MpdWrapper() {delete mpd;}
+    static void init(char* p, int size);
+    static void cleanup() {delete mpd;}
+    static bool hasMpd() {return mpd != nullptr;}
 
     /**********************************************************************
      * Properties of the MPD **********************************************
@@ -62,8 +63,8 @@ public:
     /**
      * Returns the ID of the MPD or an empty string if the ID is not set.
      */
-    string getMpdId() const {if(mpd->id.isSet()) return mpd->id.get(); else return string();}
-    int64_t getVideoDuration() const;
+    static string getMpdId() {if(mpd->id.isSet()) return mpd->id.get(); else return string();}
+    static int64_t getVideoDuration();
 
     /**********************************************************************
      * Properties of a Period *********************************************
@@ -73,83 +74,85 @@ public:
      * Properties of an Adaptation Set ************************************
      **********************************************************************/
 
-    int getNumRepresentations(const AdaptationSetId& adaptationSetId) const;
-    int getNumRepresentations(int periodIndex, int adaptationSetIndex) const;
-    int getNumRepresentations(int periodIndex, int adaptationSetIndex, int width, int height) const;
+    static int getNumRepresentations(const AdaptationSetId& adaptationSetId);
+    static int getNumRepresentations(int periodIndex, int adaptationSetIndex);
+    static int getNumRepresentations(int periodIndex, int adaptationSetIndex, int width, int height);
 
     /**
      * Retrievs all representation of a given adaptation set.
      */
-    vector<RepresentationId> getRepresentations(const AdaptationSetId& adaptationSetId) const;
+    static vector<RepresentationId> getRepresentations(const AdaptationSetId& adaptationSetId);
 
     /**
      * Retrievs all representation of a given adaptation set that match the specified spatial resolution width x height.
      * @param width   Horizontal resolution. Must be strictly greater than zero.
      * @param height  Vertical resolution. Must be strictly greater than zero.
      */
-    vector<RepresentationId> getRepresentations(const AdaptationSetId& adaptationSetId, int width, int height) const;
-    RepresentationId getRepresentationIdByBitrate(const AdaptationSetId& adaptationSetId, int bitRate) const;
-    vector<int> getBitrates(int periodIndex, int adaptationSetIndex, int width, int height) const;
-    vector<pair<int, int> > getSpatialResolutions(int periodIndex, int adaptationSetIndex) const;
-    pair<int,int> getLowestSpatialResolution(int periodIndex, int adaptationSetIndex) const;
-    pair<int,int> getHighestSpatialResolution(int periodIndex, int adaptationSetIndex) const;
-    string printSpatialResolutions(int periodIndex, int adaptationSetIndex) const;
+    static vector<RepresentationId> getRepresentations(const AdaptationSetId& adaptationSetId, int width, int height);
+    static RepresentationId getRepresentationIdByBitrate(const AdaptationSetId& adaptationSetId, int bitRate);
+    static vector<int> getBitrates(int periodIndex, int adaptationSetIndex, int width, int height);
+    static vector<pair<int, int> > getSpatialResolutions(int periodIndex, int adaptationSetIndex);
+    static pair<int,int> getLowestSpatialResolution(int periodIndex, int adaptationSetIndex);
+    static pair<int,int> getHighestSpatialResolution(int periodIndex, int adaptationSetIndex);
+    static string printSpatialResolutions(int periodIndex, int adaptationSetIndex);
 
     /**********************************************************************
      * Properties of a Representation *************************************
      **********************************************************************/
 
-    int getNumSegments(int periodIndex, int adaptationSetIndex, int representationIndex) const;
-    int getNumSegments(const dashp2p::mpd::Representation& rep) const;
-    int getNumSegments(const RepresentationId& representationId) const;
-    vector<SegmentId> getSegments(const RepresentationId& representationId) const;
-    int64_t getNominalSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex) const;
-    int64_t getNominalSegmentDuration(const dashp2p::mpd::Representation& rep) const;
-    string getInitSegmentURL(const dashp2p::mpd::Representation& rep) const;
-    dashp2p::URL getInitSegmentUrl(const RepresentationId& representationId) const;
-    ContentIdSegment getNextSegment(const ContentIdSegment& segId) const;
-    pair<int, int> getSpatialResolution(const RepresentationId& representationId) const;
-    int getBitrate(const RepresentationId& representationId) const;
-    int getWidth(const RepresentationId& representationId) const;
-    int getHeight(const RepresentationId& representationId) const;
+    static int getNumSegments(int periodIndex, int adaptationSetIndex, int representationIndex);
+    static int getNumSegments(const dashp2p::mpd::Representation& rep);
+    static int getNumSegments(const RepresentationId& representationId);
+    static vector<SegmentId> getSegments(const RepresentationId& representationId);
+    static int64_t getNominalSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex);
+    static int64_t getNominalSegmentDuration(const dashp2p::mpd::Representation& rep);
+    static string getInitSegmentURL(const dashp2p::mpd::Representation& rep);
+    static dashp2p::URL getInitSegmentUrl(const RepresentationId& representationId);
+    static ContentIdSegment getNextSegment(const ContentIdSegment& segId);
+    static pair<int, int> getSpatialResolution(const RepresentationId& representationId);
+    static int getBitrate(const RepresentationId& representationId);
+    static int getWidth(const RepresentationId& representationId);
+    static int getHeight(const RepresentationId& representationId);
 
     /**********************************************************************
      * Properties of a Segment ********************************************
      **********************************************************************/
 
-    int64_t getSegmentDuration(const ContentIdSegment& setId) const;
-    int64_t getSegmentDuration(const dashp2p::mpd::Representation& rep, int segmentIndex) const;
-    int64_t getSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex, int segmentIndex) const;
-    int64_t getPosition(const ContentIdSegment& segId, int64_t byte, int64_t segmentSize) const;
-    int64_t getStartTime(const ContentIdSegment& segId) const;
-    int64_t getEndTime(const ContentIdSegment& segId) const;
+    static int64_t getSegmentDuration(const ContentIdSegment& setId);
+    static int64_t getSegmentDuration(const dashp2p::mpd::Representation& rep, int segmentIndex);
+    static int64_t getSegmentDuration(int periodIndex, int adaptationSetIndex, int representationIndex, int segmentIndex);
+    static int64_t getPosition(const ContentIdSegment& segId, int64_t byte, int64_t segmentSize);
+    static int64_t getStartTime(const ContentIdSegment& segId);
+    static int64_t getEndTime(const ContentIdSegment& segId);
 
     /**
      * Returns the URL of a segment.
      */
-    string getSegmentURL(const ContentIdSegment& segId) const;
-    dashp2p::URL getSegmentUrl(const SegmentId& segmentId) const;
+    static string getSegmentURL(const ContentIdSegment& segId);
+    static dashp2p::URL getSegmentUrl(const SegmentId& segmentId);
 
 
 
 
 
-    //std::vector<int64_t> getSwitchingPoints(int64_t streamPosition, int num) const;
-    void outputVideoStatistics(const string& fileName) const;
+    //std::vector<int64_t> getSwitchingPoints(int64_t streamPosition, int num);
+    static void outputVideoStatistics(const string& fileName);
 
-/* Privave methods */
+/* Private methods */
 private:
-    const dashp2p::mpd::Period& getPeriod(int periodIndex) const;
-    const dashp2p::mpd::Period& getPeriod(const PeriodId& periodId) const;
-    const dashp2p::mpd::AdaptationSet& getAdaptationSet(int periodIndex, int adaptationSetIndex) const;
-    const dashp2p::mpd::AdaptationSet& getAdaptationSet(const AdaptationSetId& adaptationSetId) const;
-    const dashp2p::mpd::Representation& getRepresentation(const RepresentationId& representationId) const;
-    const dashp2p::mpd::Representation& getRepresentation(int periodIndex, int adaptationSetIndex, int representationIndex) const;
-    const dashp2p::mpd::Representation& getRepresentationByBitrate(int periodIndex, int adaptationSetIndex, int bitRate) const;
+    MpdWrapper(){}
+    virtual ~MpdWrapper(){}
+    static const dashp2p::mpd::Period& getPeriod(int periodIndex);
+    static const dashp2p::mpd::Period& getPeriod(const PeriodId& periodId);
+    static const dashp2p::mpd::AdaptationSet& getAdaptationSet(int periodIndex, int adaptationSetIndex);
+    static const dashp2p::mpd::AdaptationSet& getAdaptationSet(const AdaptationSetId& adaptationSetId);
+    static const dashp2p::mpd::Representation& getRepresentation(const RepresentationId& representationId);
+    static const dashp2p::mpd::Representation& getRepresentation(int periodIndex, int adaptationSetIndex, int representationIndex);
+    static const dashp2p::mpd::Representation& getRepresentationByBitrate(int periodIndex, int adaptationSetIndex, int bitRate);
 
 /* Private members */
 private:
-    dashp2p::mpd::MediaPresentationDescription* mpd;
+    static dashp2p::mpd::MediaPresentationDescription* mpd;
 };
 
 

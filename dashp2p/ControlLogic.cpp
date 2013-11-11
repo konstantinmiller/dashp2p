@@ -25,6 +25,7 @@
 #include "ControlLogic.h"
 #include "ControlLogicAction.h"
 #include "HttpRequestManager.h"
+#include "SegmentStorage.h"
 #include "Statistics.h"
 
 #include <cassert>
@@ -39,8 +40,8 @@ ControlLogic::ControlLogic(int width, int height)
     bitRates(),
     ifData(),
     contour(),
-    mpdWrapper(NULL),
-    mpdDataField(NULL),
+    //mpdWrapper(nullptr),
+    mpdDataField(nullptr),
     pendingActions()
 {
 	ThreadAdapter::mutexInit(&mutex);
@@ -50,7 +51,7 @@ ControlLogic::~ControlLogic()
 {
 	DBGMSG("Clean-up. Have %d pending actions.", pendingActions.size());
 	ThreadAdapter::mutexDestroy(&mutex);
-	delete mpdWrapper;
+	//delete mpdWrapper;
 	delete mpdDataField;
 	while(!pendingActions.empty()) {
 		delete pendingActions.front();
@@ -204,10 +205,10 @@ int ControlLogic::getStopSegment() const
 
 	int ret;
 	//if(stopPosition == 0)
-		ret = mpdWrapper->getNumSegments(periodIndex, adaptationSetIndex, representationIndex) - 1;
+		ret = MpdWrapper::getNumSegments(periodIndex, adaptationSetIndex, representationIndex) - 1;
 	//else
 	//	ret = ((stopPosition % mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex) == 0) ? 0 : 1) + stopPosition / mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex);
-	dp2p_assert(ret > 0 && ret < mpdWrapper->getNumSegments(periodIndex, adaptationSetIndex, representationIndex));
+	dp2p_assert(ret > 0 && ret < MpdWrapper::getNumSegments(periodIndex, adaptationSetIndex, representationIndex));
 	return ret;
 }
 
@@ -347,7 +348,7 @@ unsigned ControlLogic::getIndex(int bitrate)
 
 void ControlLogic::processEventDataReceivedMpd_Completed()
 {
-	dp2p_assert(mpdDataField->full() && !mpdWrapper);
+	dp2p_assert(mpdDataField->full());
 
 #if 0
 	FILE* f = fopen("dbg_mpd.txt", "w");
@@ -361,18 +362,17 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 	Statistics::recordScalarD64("completedDownloadMPD", dashp2p::Utilities::getTime());
 
 	/* Parse MPD */
-	mpdWrapper = new MpdWrapper(mpdDataField->getCopy((char*)malloc(mpdDataField->getReservedSize() * sizeof(char)), mpdDataField->getReservedSize()), mpdDataField->getReservedSize()); // we reserve this memory with malloc since it will be freed by the VLC XML plugin which uses free()
+	MpdWrapper::init(mpdDataField->getCopy((char*)malloc(mpdDataField->getReservedSize() * sizeof(char)), mpdDataField->getReservedSize()), mpdDataField->getReservedSize()); // we reserve this memory with malloc since it will be freed by the VLC XML plugin which uses free()
 	delete mpdDataField;
-	mpdDataField = NULL;
-	dp2p_assert(mpdWrapper);
+	mpdDataField = nullptr;
 
 	/* Logging. */
 	DBGMSG("Parsed MPD file.");
 	Statistics::recordScalarD64("parsedMPD", dashp2p::Utilities::getTime());
-	Statistics::recordScalarDouble("videoDuration", mpdWrapper->getVideoDuration() / 1e6);
+	Statistics::recordScalarDouble("videoDuration", MpdWrapper::getVideoDuration() / 1e6);
 
 	/* Give MPD to the Statistics module */
-	Statistics::setMpdWrapper(mpdWrapper);
+	//Statistics::setMpdWrapper(mpdWrapper);
 
 	INFOMSG("MPD file downloaded and parsed.");
 	state = HAVE_MPD;
@@ -381,15 +381,15 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 	const int periodIndex = 0;
 	const int adaptationSetIndex = 0;
 	const int representationIndex = 0;
-	std::string resolutions = mpdWrapper->printSpatialResolutions(periodIndex, adaptationSetIndex);
+	std::string resolutions = MpdWrapper::printSpatialResolutions(periodIndex, adaptationSetIndex);
 	INFOMSG("Available spatial resolutions:\n%s.", resolutions.c_str());
-	INFOMSG("Segment duration: %.3f.", mpdWrapper->getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex) / 1e6);
+	INFOMSG("Segment duration: %.3f.", MpdWrapper::getNominalSegmentDuration(periodIndex, adaptationSetIndex, representationIndex) / 1e6);
 
 	/* Check the requested spatial resolution */
 	if(width == -1)
 	{
 		dp2p_assert(width == height);
-		pair<int,int> newWidthHeight = mpdWrapper->getLowestSpatialResolution(periodIndex, adaptationSetIndex);
+		pair<int,int> newWidthHeight = MpdWrapper::getLowestSpatialResolution(periodIndex, adaptationSetIndex);
 		INFOMSG("Lowest spatial resolution requested. Selecting: %d x %d.", newWidthHeight.first, newWidthHeight.second);
 		width = newWidthHeight.first;
 		height = newWidthHeight.second;
@@ -397,7 +397,7 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 	else if(width == 1)
 	{
 		dp2p_assert(width == height);
-		pair<int,int> newWidthHeight = mpdWrapper->getHighestSpatialResolution(periodIndex, adaptationSetIndex);
+		pair<int,int> newWidthHeight = MpdWrapper::getHighestSpatialResolution(periodIndex, adaptationSetIndex);
 		INFOMSG("Highest spatial resolution requested. Selecting: %d x %d.", newWidthHeight.first, newWidthHeight.second);
 		width = newWidthHeight.first;
 		height = newWidthHeight.second;
@@ -412,7 +412,7 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 		INFOMSG("Requested fixed spatial resolution: %d x %d.", width, height);
 	}
 
-	if(mpdWrapper->getNumRepresentations(periodIndex, adaptationSetIndex, width, height) == 0) {
+	if(MpdWrapper::getNumRepresentations(periodIndex, adaptationSetIndex, width, height) == 0) {
 		ERRMSG("Requested screen size of %u x %u is not supported by the stream.", width, height);
 		abort();
 	}
@@ -420,7 +420,7 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 	/* Sanity checks and debug output */
 	int startSegment = getStartSegment();
 	int stopSegment = getStopSegment();
-	dp2p_assert(stopSegment > 0 && stopSegment < mpdWrapper->getNumSegments(periodIndex, adaptationSetIndex, representationIndex));
+	dp2p_assert(stopSegment > 0 && stopSegment < MpdWrapper::getNumSegments(periodIndex, adaptationSetIndex, representationIndex));
 	DBGMSG("Setting startSegment: %d, stopSegment: %d.", startSegment, stopSegment);
 }
 
@@ -428,10 +428,20 @@ ControlLogicAction* ControlLogic::createActionDownloadSegments(list<const Conten
 {
 	list<dashp2p::URL> urls;
 	list<HttpMethod> httpMethods;
-	for(list<const ContentId*>::const_iterator it = segIds.begin(); it != segIds.end(); ++it) {
+	for(list<const ContentId*>::const_iterator it = segIds.begin(); it != segIds.end(); ++it)
+	{
+	    const ContentIdSegment& segId = *dynamic_cast<const ContentIdSegment*>(*it);
+
 		//DBGMSG("%s", (*it)->toString().c_str());
-		urls.push_back(dashp2p::Utilities::splitURL(mpdWrapper->getSegmentURL(dynamic_cast<const ContentIdSegment&>(**it))));
+		urls.push_back(dashp2p::Utilities::splitURL(MpdWrapper::getSegmentURL(segId)));
 		httpMethods.push_back(httpMethod);
+
+		if(!SegmentStorage::initialized(segId)) {
+		    DBGMSG("Segment not yet available in the storage. Initializing.");
+		    SegmentStorage::initSegment(segId, -1, MpdWrapper::getSegmentDuration(segId));
+		} else {
+		    DBGMSG("Segment aleady registered in the storage module.");
+		}
 	}
 	return new ControlLogicActionStartDownload(tcpConnectionId, segIds, urls, httpMethods);
 }

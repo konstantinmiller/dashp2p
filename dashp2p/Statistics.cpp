@@ -39,7 +39,7 @@
 
 namespace dashp2p {
 
-const MpdWrapper* Statistics::mpdWrapper = NULL;
+//const MpdWrapper* Statistics::mpdWrapper = nullptr;
 std::string Statistics::logDir;
 //std::list<HttpRequest*> Statistics::rsList;
 map<int, list<int> > Statistics::httpRequests;
@@ -47,22 +47,22 @@ map<int, list<int> > Statistics::httpRequests;
 bool  Statistics::logTcpState = false;
 map<int, FILE*> Statistics::filesTcpState;
 bool  Statistics::logScalarValues = false;
-FILE* Statistics::fileScalarValues = NULL;
+FILE* Statistics::fileScalarValues = nullptr;
 bool  Statistics::logAdaptationDecision = false;
-FILE* Statistics::fileAdaptationDecision = NULL;
+FILE* Statistics::fileAdaptationDecision = nullptr;
 bool  Statistics::logGiveDataToVlc = false;
-FILE* Statistics::fileGiveDataToVlc = NULL;
+FILE* Statistics::fileGiveDataToVlc = nullptr;
 bool  Statistics::logBytesStored = false;
-FILE* Statistics::fileBytesStored = NULL;
+FILE* Statistics::fileBytesStored = nullptr;
 bool  Statistics::logSecStored = false;
-FILE* Statistics::fileSecStored = NULL;
-//FILE* Statistics::fileSecDownloaded = NULL;
+FILE* Statistics::fileSecStored = nullptr;
+//FILE* Statistics::fileSecDownloaded = nullptr;
 bool  Statistics::logUnderruns = false;
-FILE* Statistics::fileUnderruns = NULL;
+FILE* Statistics::fileUnderruns = nullptr;
 bool  Statistics::logReconnects = false;
-FILE* Statistics::fileReconnects = NULL;
+FILE* Statistics::fileReconnects = nullptr;
 bool  Statistics::logSegmentSizes = false;
-FILE* Statistics::fileSegmentSizes = NULL;
+FILE* Statistics::fileSegmentSizes = nullptr;
 bool  Statistics::logRequestStatistics = false;
 bool  Statistics::logRequestDownloadProgress = false;
 
@@ -74,7 +74,7 @@ void Statistics::init(const std::string& logDir, const bool logTcpState, const b
     if(logDir.empty())
         return;
 
-    dp2p_assert(mpdWrapper == NULL);
+    //dp2p_assert(mpdWrapper == nullptr);
 
     dp2p_assert(Statistics::logDir.empty());
     Statistics::logDir = logDir;
@@ -87,30 +87,30 @@ void Statistics::init(const std::string& logDir, const bool logTcpState, const b
     dp2p_assert(Statistics::filesTcpState.empty());
 
     Statistics::logScalarValues = logScalarValues;
-    dp2p_assert(Statistics::fileScalarValues == NULL);
+    dp2p_assert(Statistics::fileScalarValues == nullptr);
 
     Statistics::logAdaptationDecision = logAdaptationDecision;
-    dp2p_assert(Statistics::fileAdaptationDecision == NULL);
+    dp2p_assert(Statistics::fileAdaptationDecision == nullptr);
 
     Statistics::logGiveDataToVlc = logGiveDataToVlc;
-    dp2p_assert(Statistics::fileGiveDataToVlc == NULL);
+    dp2p_assert(Statistics::fileGiveDataToVlc == nullptr);
 
     Statistics::logBytesStored = logBytesStored;
-    dp2p_assert(Statistics::fileBytesStored == NULL);
+    dp2p_assert(Statistics::fileBytesStored == nullptr);
 
     Statistics::logSecStored = logSecStored;
-    dp2p_assert(Statistics::fileSecStored == NULL);
+    dp2p_assert(Statistics::fileSecStored == nullptr);
 
-    //FILE* Statistics::fileSecDownloaded = NULL;
+    //FILE* Statistics::fileSecDownloaded = nullptr;
 
     Statistics::logUnderruns = logUnderruns;
-    dp2p_assert(Statistics::fileUnderruns == NULL);
+    dp2p_assert(Statistics::fileUnderruns == nullptr);
 
     Statistics::logReconnects = logReconnects;
-    dp2p_assert(Statistics::fileReconnects == NULL);
+    dp2p_assert(Statistics::fileReconnects == nullptr);
 
     Statistics::logSegmentSizes = logSegmentSizes;
-    dp2p_assert(Statistics::fileSegmentSizes == NULL);
+    dp2p_assert(Statistics::fileSegmentSizes == nullptr);
 
     Statistics::logRequestStatistics = logRequestStatistics;
     Statistics::logRequestDownloadProgress = logRequestDownloadProgress;
@@ -118,7 +118,7 @@ void Statistics::init(const std::string& logDir, const bool logTcpState, const b
 
 void Statistics::cleanUp()
 {
-	mpdWrapper = NULL;
+	//mpdWrapper = nullptr;
 
 	logDir.erase();
 
@@ -128,65 +128,65 @@ void Statistics::cleanUp()
 	Statistics::logTcpState = false;
 	while(!filesTcpState.empty()) {
 		FILE* f = filesTcpState.begin()->second;
-		dp2p_assert(f != NULL);
+		dp2p_assert(f != nullptr);
 		dp2p_assert(0 == fclose(f));
 		filesTcpState.erase(filesTcpState.begin());
 	}
 
 	Statistics::logScalarValues = false;
-	if(fileScalarValues != NULL) {
+	if(fileScalarValues != nullptr) {
 		fprintf(fileScalarValues, "</ScalarValues>\n");
 		dp2p_assert(0 == fclose(fileScalarValues));
-		fileScalarValues = NULL;
+		fileScalarValues = nullptr;
 	}
 
 	logAdaptationDecision = false;
-	if(fileAdaptationDecision != NULL) {
+	if(fileAdaptationDecision != nullptr) {
 		dp2p_assert(0 == fclose(fileAdaptationDecision));
-		fileAdaptationDecision = NULL;
+		fileAdaptationDecision = nullptr;
 	}
 
 	logGiveDataToVlc = false;
-	if(fileGiveDataToVlc != NULL) {
+	if(fileGiveDataToVlc != nullptr) {
 		dp2p_assert(0 == fclose(fileGiveDataToVlc));
-		fileGiveDataToVlc = NULL;
+		fileGiveDataToVlc = nullptr;
 	}
 
 	logBytesStored = false;
-	if(fileBytesStored != NULL) {
+	if(fileBytesStored != nullptr) {
 		dp2p_assert(0 == fclose(fileBytesStored));
-		fileBytesStored = NULL;
+		fileBytesStored = nullptr;
 	}
 
 	logSecStored = false;
-	if(fileSecStored != NULL) {
+	if(fileSecStored != nullptr) {
 		dp2p_assert(0 == fclose(fileSecStored));
-		fileSecStored = NULL;
+		fileSecStored = nullptr;
 	}
 
 #if 0
-if(fileSecDownloaded != NULL) {
+if(fileSecDownloaded != nullptr) {
 	dp2p_assert(0 == fclose(fileSecDownloaded));
-	fileSecDownloaded = NULL;
+	fileSecDownloaded = nullptr;
 }
 #endif
 
     logUnderruns = false;
-    if(fileUnderruns != NULL) {
+    if(fileUnderruns != nullptr) {
     	dp2p_assert(0 == fclose(fileUnderruns));
-    	fileUnderruns = NULL;
+    	fileUnderruns = nullptr;
     }
 
     logReconnects = false;
-    if(fileReconnects != NULL) {
+    if(fileReconnects != nullptr) {
     	dp2p_assert(0 == fclose(fileReconnects));
-    	fileReconnects = NULL;
+    	fileReconnects = nullptr;
     }
 
     logSegmentSizes = false;
-    if(fileSegmentSizes != NULL) {
+    if(fileSegmentSizes != nullptr) {
     	dp2p_assert(0 == fclose(fileSegmentSizes));
-    	fileSegmentSizes = NULL;
+    	fileSegmentSizes = nullptr;
     }
 
     Statistics::logRequestStatistics = false;
@@ -204,7 +204,7 @@ int32_t Statistics::registerTcpConnection()
 void Statistics::unregisterTcpConnection(const TcpConnectionId& tcpConnectionId)
 {
 	if(0 != filesTcpState.count(tcpConnectionId.numeric())) {
-		if(filesTcpState.at(tcpConnectionId.numeric()) != NULL) {
+		if(filesTcpState.at(tcpConnectionId.numeric()) != nullptr) {
 			dp2p_assert(0 == fclose(filesTcpState.at(tcpConnectionId.numeric())));
 		}
 		filesTcpState.erase(tcpConnectionId.numeric());
@@ -515,8 +515,8 @@ void Statistics::outputStatistics()
     			fprintf(fileRequestStatistics, " %d", HttpRequestManager::getHdr(reqId).keepAliveMax);
     			fprintf(fileRequestStatistics, " %u", HttpRequestManager::isSentPipelined(reqId) ? 1 : 0);
 
-    			if(mpdWrapper && HttpRequestManager::getContentType(reqId) == ContentType_Segment)
-                    fprintf(fileRequestStatistics, " %.6f",  mpdWrapper->getSegmentDuration(dynamic_cast<const ContentIdSegment&>(HttpRequestManager::getContentId(reqId))) / 1e6);
+    			if(MpdWrapper::hasMpd() && HttpRequestManager::getContentType(reqId) == ContentType_Segment)
+                    fprintf(fileRequestStatistics, " %.6f",  MpdWrapper::getSegmentDuration(dynamic_cast<const ContentIdSegment&>(HttpRequestManager::getContentId(reqId))) / 1e6);
                 else
                     fprintf(fileRequestStatistics, " 0");
 

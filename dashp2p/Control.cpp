@@ -94,7 +94,7 @@ std::string Control::adaptationConfiguration = std::string();
 //Control::RequestMap Control::requestMap;
 
 /* Storage related */
-SegmentStorage* Control::storage = NULL;
+//SegmentStorage* Control::storage = NULL;
 
 /* Display handover related stuff */
 //sem_t Control::displayHandoverSema;
@@ -186,8 +186,8 @@ void Control::init(
 #endif
 
     /* Storage related */
-    dp2p_assert(storage == NULL);
-    storage = new SegmentStorage();
+    //dp2p_assert(storage == NULL);
+    //storage = new SegmentStorage();
 
     /* Display handover related stuff */
     //dp2p_assert(0 == sem_init(&displayHandoverSema, 0, 0));
@@ -283,7 +283,7 @@ void Control::cleanUp()
     //Control::height = 0;
 
     /* Storage related */
-    delete storage; storage = NULL;
+    //delete storage; storage = NULL;
 
     /* Display handover related stuff */
     //dp2p_assert(0 == sem_destroy(&displayHandoverSema));
@@ -710,24 +710,29 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 		return;
 	}*/
 
+	hier weitermachen: check if mutex can be abandonded from Control. instead, protect SegmentStorage internally by mutexes
 	ThreadAdapter::mutexLock(&mutex);
 	DBGMSG("Locked mutex.");
 
 	dp2p_assert(segId.segmentIndex() <= controlLogic->getStopSegment() && HttpRequestManager::getContentLength(e.reqId) > 0);
 
 	/* If it is first data of the segment, initialize the corresponding Segment object */
+#if 0
 	if(!storage->initialized(segId)) {
 		DBGMSG("Segment not yet available in the storage. Initializing.");
 		storage->initSegment(segId, HttpRequestManager::getContentLength(e.reqId), controlLogic->getMpdWrapper()->getSegmentDuration(segId));
 	} else {
 		DBGMSG("Segment aleady registered in the storage module.");
 	}
+#endif
 
 	/* Create a DataBlock to hold a copy of the data and add it to the storage */
+#if 0
 	DBGMSG("Bevor addData");
 	// TODO: make DashHttp write data direct to segment storage so nothing needs to be done here
-	storage->addData(segId, e.byteFrom, e.byteTo, HttpRequestManager::getPldBytes(e.reqId) + e.byteFrom, false);
+	SegmentStorage::addData(segId, e.byteFrom, e.byteTo, HttpRequestManager::getPldBytes(e.reqId) + e.byteFrom, false);
 	DBGMSG("After addData");
+#endif
 
 	/* If segment completed, dump segment data */
 #if 0
@@ -749,7 +754,7 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 #endif
 
 	DBGMSG("Calculating contig interval.");
-	const pair<int64_t, int64_t> availableContigInterval = storage->getContigInterval(getNextPosition(), controlLogic->getContour());
+	const pair<int64_t, int64_t> availableContigInterval = SegmentStorage::getContigInterval(getNextPosition(), controlLogic->getContour());
 
 	DBGMSG("Have %" PRId64 " bytes (%" PRId64 " us) of contiguous data in the storage.", availableContigInterval.second, availableContigInterval.first);
 
@@ -879,7 +884,7 @@ int Control::vlcCb(char** buffer, int* bufferSize, int* bytesReturned, int64_t* 
     //else if(state != ControlState_Paused && absNow >= startTime - startTimeTolerance)
     {
         //startTimeCrossed = true;
-        if(controlLogic->getContour().empty() || !storage->dataAvailable(getNextPosition())) {
+        if(controlLogic->getContour().empty() || !SegmentStorage::dataAvailable(getNextPosition())) {
         	int64_t waitingTime = -1;
             if(controlLogic->getContour().empty()) {
             	waitingTime = 1000000;
@@ -900,7 +905,7 @@ int Control::vlcCb(char** buffer, int* bufferSize, int* bytesReturned, int64_t* 
                 DBGMSG("Back from waiting. Everything is terminating. Will return.");
                 ThreadAdapter::mutexUnlock(&mutex);
                 return 0;
-            } else if(!controlLogic->getContour().empty() && storage->dataAvailable(getNextPosition())) { // data available, go on
+            } else if(!controlLogic->getContour().empty() && SegmentStorage::dataAvailable(getNextPosition())) { // data available, go on
                 DBGMSG("Back from waiting. Data is available.");
             } else { // still no data available, return
                 DBGMSG("Back from waiting. Still no data available. Will return.");
@@ -932,7 +937,7 @@ int Control::vlcCb(char** buffer, int* bufferSize, int* bytesReturned, int64_t* 
         }
     }*/
 
-    const pair<int64_t, int64_t> contigIntervalPre = storage->getContigInterval(getNextPosition(), controlLogic->getContour());
+    const pair<int64_t, int64_t> contigIntervalPre = SegmentStorage::getContigInterval(getNextPosition(), controlLogic->getContour());
     DBGMSG("We passed startTime and %" PRId64 " bytes (%" PRId64 " us) are available starting from (RepId: %d, SegNr: %d, offset: %" PRId64 ").", contigIntervalPre.second, contigIntervalPre.first, curPos.segId.bitRate(), curPos.segId.segmentIndex(), curPos.byte);
 
     // TODO: this should be somewhere else for cleaner style
@@ -955,10 +960,10 @@ int Control::vlcCb(char** buffer, int* bufferSize, int* bytesReturned, int64_t* 
     }
 #endif
 
-    const StreamPosition lastPos = storage->getData(getNextPosition(), controlLogic->getContour(), buffer, bufferSize, bytesReturned, usecReturned);
+    const StreamPosition lastPos = SegmentStorage::getData(getNextPosition(), controlLogic->getContour(), buffer, bufferSize, bytesReturned, usecReturned);
     curPos = lastPos;
 
-    const pair<int64_t, int64_t> contigIntervalPost = storage->getContigInterval(getNextPosition(), controlLogic->getContour());
+    const pair<int64_t, int64_t> contigIntervalPost = SegmentStorage::getContigInterval(getNextPosition(), controlLogic->getContour());
 
 #if 0
     /* Signal if beta is below Bdelay. */
@@ -1036,20 +1041,20 @@ int Control::vlcCb(char** buffer, int* bufferSize, int* bytesReturned, int64_t* 
 
 int64_t Control::getPosition()
 {
-	const int64_t segmentSize = storage->getTotalSize(curPos.segId);
-	return controlLogic->getMpdWrapper()->getPosition(curPos.segId, curPos.byte, segmentSize);
+	const int64_t segmentSize = SegmentStorage::getTotalSize(curPos.segId);
+	return MpdWrapper::getPosition(curPos.segId, curPos.byte, segmentSize);
 }
 
 std::vector<int64_t> Control::getSwitchingPoints(int _num)
 {
-    if(controlLogic->getMpdWrapper() == NULL || !curPos.valid() || curPos.segId.segmentIndex() == controlLogic->getStopSegment())
+    if(!curPos.valid() || curPos.segId.segmentIndex() == controlLogic->getStopSegment())
         return std::vector<int64_t>();
 
     int num = std::min<int>(_num, controlLogic->getStopSegment() - curPos.segId.segmentIndex());
     std::vector<int64_t> retVal(num);
     for(unsigned i = 0; i < retVal.size(); ++i) {
     	const ContentIdSegment nextSegId(curPos.segId.periodIndex(), curPos.segId.adaptationSetIndex(), curPos.segId.bitRate(), curPos.segId.segmentIndex() + i);
-    	retVal.at(i) = controlLogic->getMpdWrapper()->getEndTime(nextSegId);
+    	retVal.at(i) = MpdWrapper::getEndTime(nextSegId);
     }
     return retVal;
 }
@@ -1249,10 +1254,10 @@ void Control::resumePlayback()
     DBGMSG("Enter resumePlayback().");
 
     const StreamPosition nextPos = getNextPosition();
-    if(!storage->dataAvailable(nextPos)) {
+    if(!SegmentStorage::dataAvailable(nextPos)) {
         ERRMSG("Bug?");
         DBGMSG("Current position: %s.", curPos.toString().c_str());
-        DBGMSG("Downloaded data:\n%s", storage->printDownloadedData(0, 0).c_str());
+        DBGMSG("Downloaded data:\n%s", SegmentStorage::printDownloadedData(0, 0).c_str());
         exit(1);
     }
 
@@ -1281,7 +1286,7 @@ StreamPosition Control::getNextPosition()
         return startPosition;
     }
 
-    if(curPos.byte < storage->getTotalSize(curPos.segId) - 1) {
+    if(curPos.byte < SegmentStorage::getTotalSize(curPos.segId) - 1) {
         StreamPosition nextPos(curPos);
         nextPos.byte = curPos.byte + 1;
         return nextPos;
@@ -1292,11 +1297,12 @@ StreamPosition Control::getNextPosition()
 
 bool Control::eof()
 {
-	if(controlLogic->getMpdWrapper() == NULL) {
+	if(!MpdWrapper::hasMpd()) {
 		return false;
 	} else if(forcedEof) {
 		return true;
-	} else if(controlLogic->getStopSegment() > 0 && curPos.segId.segmentIndex() == controlLogic->getStopSegment() && curPos.byte == storage->getTotalSize(curPos.segId) - 1) {
+	} else if(controlLogic->getStopSegment() > 0 && curPos.segId.segmentIndex() == controlLogic->getStopSegment()
+	        && curPos.byte == SegmentStorage::getTotalSize(curPos.segId) - 1) {
 		return true;
 	}
 	return false;

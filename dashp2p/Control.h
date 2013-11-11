@@ -94,7 +94,7 @@ public:
     /* Overlay related stuff */
     static void displayThroughputOverlay(int segNr, int64_t usec, double thrpt);
 
-    static void toFile (ContentIdSegment segId, string& fileName){storage->toFile(segId,fileName);};
+    //static void toFile (ContentIdSegment segId, string& fileName){SegmentStorage::toFile(segId,fileName);};
 
 /* Private methods. */
 protected:
@@ -167,7 +167,7 @@ protected:
     //static RequestMap requestMap;
 
     /* Storage related */
-    static SegmentStorage* storage;
+    //static SegmentStorage* storage;
 
     /* Display handover related stuff */
     //static bool withHandover;

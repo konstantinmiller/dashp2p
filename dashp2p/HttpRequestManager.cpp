@@ -72,15 +72,21 @@ void HttpRequestManager::appendHdrBytes(int reqId, const void* p, int newHdrByte
 	req->hdrCompleted = (0 == memcmp(req->hdrBytes + (req->hdrBytesReceived - 4), "\r\n\r\n", 4));
 }
 
+// TODO: let DashHttp read directly from socket into DataField
 void HttpRequestManager::appendPldBytes(int reqId, const void* p, int newPldBytes, int64_t recvTimestamp)
 {
 	HttpRequest* req = reqs.at(reqId / s)->at(reqId % s);
 
+	if(req->pldBytesReceived == 0)
+	    SegmentStorage::setSize(req->getContentId(), req->hdr.contentLength);
+
 	if(req->pldBytesReceived + newPldBytes == req->hdr.contentLength)
 		req->tsLastByte = recvTimestamp;
-	if(!req->pldBytes)
-		req->pldBytes = new char[req->hdr.contentLength];
-	memcpy(req->pldBytes + req->pldBytesReceived, p, newPldBytes);
+	//if(!req->pldBytes)
+	//	req->pldBytes = new char[req->hdr.contentLength];
+	//memcpy(req->pldBytes + req->pldBytesReceived, p, newPldBytes);
+	const bool overwrite = true;
+	SegmentStorage::addData(req->getContentId(), req->pldBytesReceived, req->pldBytesReceived + newPldBytes - 1, (char*)p, overwrite);
 	req->pldBytesReceived += newPldBytes;
 }
 

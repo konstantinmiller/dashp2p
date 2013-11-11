@@ -38,23 +38,24 @@ class DashSegment
 /* Public methods */
 public:
     DashSegment(const ContentIdSegment& segId, int64_t numBytes, int64_t duration);
-    ~DashSegment(){}
+    ~DashSegment(){delete dataField;}
+    void setSize(int64_t s);
     void setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite);
-    pair<int64_t, int64_t> getData(int64_t offset, char* buffer, int bufferSize) const;
+    pair<int64_t, int64_t> getData(int64_t offset, char* buffer, int bufferSize);
     int64_t getTotalSize() const;
     int64_t getTotalDuration() const {return duration;}
-    bool completed() const {return dataField.full();}
-    bool hasData(int64_t byteNr) const {return dataField.isOccupied(byteNr);}
-    pair<int64_t, int64_t> getContigInterval(int64_t offset) const;
-    string printDownloadedData(int64_t offset) const {return dataField.printDownloadedData(offset);}
-    void toFile(string& fileName) const;
+    bool completed() const {return dataField && dataField->full();}
+    bool hasData(int64_t byteNr) {return dataField && dataField->isOccupied(byteNr);}
+    pair<int64_t, int64_t> getContigInterval(int64_t offset);
+    string printDownloadedData(int64_t offset) {return dataField->printDownloadedData(offset);}
+    void toFile(string& fileName);
 
 public:
     const ContentIdSegment segId;
 
 /* Private members */
 private:
-    DataField dataField;
+    DataField* dataField;
     const int64_t duration;
 };
 

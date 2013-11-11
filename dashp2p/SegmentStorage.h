@@ -47,35 +47,41 @@ class SegmentStorage
 {
 /* Public methods */
 public:
-    SegmentStorage();
-    virtual ~SegmentStorage();
-    void clear();
-    bool initialized(ContentIdSegment segId) const;
-    void initSegment(ContentIdSegment segId, int64_t numBytes, int64_t duration);
-    void addData(ContentIdSegment segId, int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite);
-    StreamPosition getData(StreamPosition startPos, Contour contour, char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned);
-    StreamPosition getSegmentData(StreamPosition startPos, char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned);
-    int64_t getTotalSize(ContentIdSegment segId) const;
-    int64_t getTotalDuration(ContentIdSegment segId) const;
-    const DashSegment& getSegment(ContentIdSegment segId) const;
+    static void cleanup();
+    static bool initialized(ContentIdSegment segId);
+    static void initSegment(ContentIdSegment segId, int64_t numBytes, int64_t duration);
+    static void setSize(const ContentId& segId, int64_t numBytes);
+    static void addData(const ContentId& segId, int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite);
+    static StreamPosition getData(StreamPosition startPos, Contour contour, char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned);
+    static StreamPosition getSegmentData(StreamPosition startPos, char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned);
+    static int64_t getTotalSize(ContentIdSegment segId);
+    static int64_t getTotalDuration(ContentIdSegment segId);
+    static DashSegment& getSegment(const ContentId& segId);
     /* contiguous interval starting exactly at strPos */
-    pair<int64_t, int64_t> getContigInterval(StreamPosition strPos, Contour contour) const;
+    static pair<int64_t, int64_t> getContigInterval(StreamPosition strPos, Contour contour);
     /* If data is available at the exactly position strPos */
-    bool dataAvailable(StreamPosition strPos) const;
-    string printDownloadedData(int startSegNr, int64_t offset) const;
-    void toFile (ContentIdSegment segId, string& fileName) const;
-
-/* Private types */
-private:
-    typedef map<ContentIdSegment, DashSegment*> SegMap;
+    static bool dataAvailable(StreamPosition strPos);
+    static string printDownloadedData(int startSegNr, int64_t offset);
+    static void toFile (ContentIdSegment segId, string& fileName);
 
 /* Private methods */
 private:
-    DashSegment& getSegment(ContentIdSegment segId);
+    SegmentStorage(){}
+    virtual ~SegmentStorage(){}
+
+/* Private types */
+private:
+    typedef map<ContentIdMpd, DashSegment*> MpdMap;
+    typedef map<ContentIdSegment, DashSegment*> SegMap;
+
+/* Private methods */
+//private:
+//    static DashSegment& getSegment(ContentIdSegment segId);
 
 /* Private members */
 private:
-     SegMap segMap;
+    static MpdMap mpdMap;
+    static SegMap segMap;
 };
 
 }

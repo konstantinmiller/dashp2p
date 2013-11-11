@@ -61,7 +61,7 @@ public:
     virtual int getStartSegment() const;
     virtual int getStopSegment() const;
 
-    virtual const MpdWrapper* getMpdWrapper() const {return mpdWrapper;}
+    //virtual const MpdWrapper* getMpdWrapper() const {return mpdWrapper;}
     virtual const Contour& getContour() const {return contour;}
 
     //virtual void setStartPosition(int64_t startPosition) {this->startPosition = startPosition;}
@@ -113,7 +113,7 @@ protected:
 
     Contour contour;
 
-    MpdWrapper* mpdWrapper;
+    //MpdWrapper* mpdWrapper;
     DataField* mpdDataField;
 
     ActionList pendingActions;

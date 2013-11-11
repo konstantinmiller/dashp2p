@@ -175,7 +175,7 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedMpd(ControlLog
 	const int periodIndex = 0;
 	const int adaptationSetIndex = 0;
 
-	bitRates = mpdWrapper->getBitrates(periodIndex, adaptationSetIndex, width, height);
+	bitRates = MpdWrapper::getBitrates(periodIndex, adaptationSetIndex, width, height);
 	const int startSegment = getStartSegment();
 	const int stopSegment = getStopSegment();
 
@@ -613,7 +613,7 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
             DBGMSG("We are in [Blow, Inf).");
             if (bitRates.at(iLast + 1) <= alfa4 * rho) {
             	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast + 1), lastSegment.segmentIndex() + 1);
-            	const double Bdelay_new = (Bhigh - mpdWrapper->getSegmentDuration(nextSegment) / 1e6);
+            	const double Bdelay_new = (Bhigh - MpdWrapper::getSegmentDuration(nextSegment) / 1e6);
                 if(Bdelay_new < beta) {
                     INFOMSGWT("InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput high enough to increase: r_higher <= alfa4 * rho (%.3f <= %f * %.3f). Delay until beta = %.3f.",
                             beta, Blow, bitRates.at(iLast + 1) / 1e6, alfa4, rho / 1e6, Bdelay_new);
@@ -624,7 +624,7 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
                 return Decision(bitRates.at(iLast + 1), Bdelay_new * 1000000, II3_UP);
             } else {
             	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast), lastSegment.segmentIndex() + 1);
-            	const double Bdelay_new = (Bhigh - mpdWrapper->getSegmentDuration(nextSegment) / 1e6);
+            	const double Bdelay_new = (Bhigh - MpdWrapper::getSegmentDuration(nextSegment) / 1e6);
                 if(Bdelay_new < beta) {
                     INFOMSGWT("InitialIncrease. beta in [Blow, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher > alfa4 * rho (%.3f <= %f * %.3f). Delay until beta = %.3f.",
                             beta, Blow, bitRates.at(iLast) / 1e6, alfa4, rho / 1e6, Bdelay_new);
@@ -680,7 +680,7 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
         if(iLast == iHighest || bitRates.at(iLast + 1) >= alfa5 * rho) {
             /* delay */
         	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast), lastSegment.segmentIndex() + 1);
-            const double Bdelay_new = std::max<double>(beta - mpdWrapper->getSegmentDuration(nextSegment) / 1e6, 0.5 * (Blow + Bhigh));
+            const double Bdelay_new = std::max<double>(beta - MpdWrapper::getSegmentDuration(nextSegment) / 1e6, 0.5 * (Blow + Bhigh));
             if(iLast == iHighest) {
                 if(beta > Bdelay_new) {
                     INFOMSGWT("beta in [Blow, Bhigh) (%.3g in [%g, %g)). Already at highest bit-rate (%.3g). Delay until beta = %.3g.",
@@ -716,7 +716,7 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
             int64_t Bdelay_new = 0;
             if(iLast == iHighest) {
             	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast), lastSegment.segmentIndex() + 1);
-                Bdelay_new = std::max<int64_t>(1000000 * (int64_t)beta - mpdWrapper->getSegmentDuration(nextSegment) - 1000000, 500000 * (int64_t)(Blow + Bhigh));
+                Bdelay_new = std::max<int64_t>(1000000 * (int64_t)beta - MpdWrapper::getSegmentDuration(nextSegment) - 1000000, 500000 * (int64_t)(Blow + Bhigh));
                 if(beta > Bdelay_new) {
                     INFOMSGWT("beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Already at highest bit-rate (%.3g). Delay until beta = %.3g.",
                             beta, Bhigh, bitRates.at(iHighest) / 1e6, Bdelay_new);
@@ -726,7 +726,7 @@ ControlLogicST::Decision ControlLogicST::selectRepresentation(bool ifBetaMinIncr
                 }
             } else {
             	const ContentIdSegment nextSegment(lastSegment.periodIndex(), lastSegment.adaptationSetIndex(), bitRates.at(iLast), lastSegment.segmentIndex() + 1);
-                Bdelay_new = std::max<int64_t>(1000000 * (int64_t)beta - mpdWrapper->getSegmentDuration(nextSegment), 500000 * (int64_t)(Blow + Bhigh));
+                Bdelay_new = std::max<int64_t>(1000000 * (int64_t)beta - MpdWrapper::getSegmentDuration(nextSegment), 500000 * (int64_t)(Blow + Bhigh));
                 if(beta > Bdelay_new) {
                     INFOMSGWT("beta in [Bhigh, Inf) (%.3g in [%g, Inf)). Throughput too low to increase: r_higher >= alfa5 * rho (%.3g >= %g * %.3g). Delay until beta = %.3g.",
                             beta, Bhigh, bitRates.at(iLast + 1) / 1e6, alfa5, rho / 1e6, Bdelay_new);

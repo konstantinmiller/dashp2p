@@ -58,7 +58,7 @@ public:
 
     static string getLogDir() {return logDir;}
 
-    static void setMpdWrapper(const MpdWrapper* mpdWrapper) {Statistics::mpdWrapper = mpdWrapper;}
+    //static void setMpdWrapper(const MpdWrapper* mpdWrapper) {Statistics::mpdWrapper = mpdWrapper;}
 
     /* TCP connections */
     //static int32_t registerTcpConnection();
@@ -115,7 +115,7 @@ private:
 
 /* Private fields */
 private:
-    static const MpdWrapper* mpdWrapper;
+    //static const MpdWrapper* mpdWrapper;
     static std::string logDir;
     //static std::list<HttpRequest*> rsList;
     static map<int, list<int> > httpRequests;

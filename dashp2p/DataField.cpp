@@ -22,8 +22,8 @@
 
 
 //#include "Dashp2pTypes.h"
-#include "DebugAdapter.h"
 #include "DataField.h"
+#include "DebugAdapter.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -39,6 +39,7 @@ DataField::DataField(int64_t numBytes)
     occupiedSize(0),
     dataMap()
 {
+    ThreadAdapter::mutexInit(&mutex);
     dp2p_assert(p);
 }
 
@@ -48,25 +49,32 @@ DataField::~DataField()
     //int64_t reservedSize;
     //int64_t occupiedSize;
     //map<int64_t, int64_t> dataMap;
+    ThreadAdapter::mutexDestroy(&mutex);
 }
 
-bool DataField::isOccupied(int64_t byteNr) const
+bool DataField::isOccupied(int64_t byteNr)
 {
+    ThreadAdapter::mutexLock(&mutex);
     dp2p_assert(p && reservedSize && 0 <= byteNr && byteNr < reservedSize);
     for(map<int64_t, int64_t>::const_iterator it = dataMap.begin(); it != dataMap.end(); ++it)
     {
         const int64_t _from = it->first;
         const int64_t _to = it->second;
-        if(_from <= byteNr && byteNr <= _to)
+        if(_from <= byteNr && byteNr <= _to) {
+            ThreadAdapter::mutexUnlock(&mutex);
             return true;
-        else if(byteNr < _from)
+        } else if(byteNr < _from) {
+            ThreadAdapter::mutexUnlock(&mutex);
             return false;
+        }
     }
+    ThreadAdapter::mutexUnlock(&mutex);
     return false;
 }
 
 void DataField::setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite)
 {
+    ThreadAdapter::mutexLock(&mutex);
     dp2p_assert(p && byteFrom <= byteTo && byteTo < reservedSize && srcBuffer);
 
     /* Copy the data */
@@ -124,10 +132,13 @@ void DataField::setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer,
 
     /* Create an entry in the data map */
     dp2p_assert(dataMap.insert(pair<int64_t, int64_t>(leftBoundaryMerged, rightBoundaryMerged)).second);
+
+    ThreadAdapter::mutexUnlock(&mutex);
 }
 
-int64_t DataField::getData(int64_t offset, char* buffer, int bufferSize) const
+int64_t DataField::getData(int64_t offset, char* buffer, int bufferSize)
 {
+    ThreadAdapter::mutexLock(&mutex);
     DataMap::const_iterator it = dataMap.begin();
     for( ; it != dataMap.end(); ++it)
     {
@@ -140,6 +151,7 @@ int64_t DataField::getData(int64_t offset, char* buffer, int bufferSize) const
 
     memcpy(buffer, p + offset, numCopiedBytes);
 
+    ThreadAdapter::mutexUnlock(&mutex);
     return numCopiedBytes;
 }
 
@@ -149,8 +161,9 @@ bool DataField::full() const
     return (occupiedSize == reservedSize);
 }
 
-char* DataField::getCopy(char* pCopy, int64_t size) const
+char* DataField::getCopy(char* pCopy, int64_t size)
 {
+    ThreadAdapter::mutexLock(&mutex);
     dp2p_assert(full());
     if(size > 0) {
     	dp2p_assert(size == reservedSize);
@@ -159,11 +172,13 @@ char* DataField::getCopy(char* pCopy, int64_t size) const
     }
     dp2p_assert(pCopy);
     memcpy(pCopy, p, reservedSize);
+    ThreadAdapter::mutexUnlock(&mutex);
     return pCopy;
 }
 
-int64_t DataField::getContigInterval(int64_t offset) const
+int64_t DataField::getContigInterval(int64_t offset)
 {
+    ThreadAdapter::mutexLock(&mutex);
     DataMap::const_iterator it = dataMap.begin();
     for( ; it != dataMap.end(); ++it)
     {
@@ -172,11 +187,13 @@ int64_t DataField::getContigInterval(int64_t offset) const
     }
     dp2p_assert(it != dataMap.end());
 
+    ThreadAdapter::mutexUnlock(&mutex);
     return it->second - offset + 1;
 }
 
-string DataField::printDownloadedData(int64_t offset) const
+string DataField::printDownloadedData(int64_t offset)
 {
+    ThreadAdapter::mutexLock(&mutex);
     string ret;
     char tmp[1024];
     for(DataMap::const_iterator it = dataMap.begin(); it != dataMap.end(); ++it)
@@ -189,17 +206,20 @@ string DataField::printDownloadedData(int64_t offset) const
             ret.append(tmp);
         }
     }
+    ThreadAdapter::mutexUnlock(&mutex);
     return ret;
 }
 
-void DataField::toFile(string& fileName) const
+void DataField::toFile(string& fileName)
 {
+    ThreadAdapter::mutexLock(&mutex);
 	DBGMSG("occupied : %lld reserved : %lld",occupiedSize, reservedSize);
 	assert(full());
 	FILE* f = fopen(fileName.c_str(),"w");
 	assert(f);
 	assert(occupiedSize == (int64_t)fwrite(p, 1, occupiedSize, f));
 	assert(0 == fclose(f));
+	ThreadAdapter::mutexUnlock(&mutex);
 }
 
 
@@ -216,9 +236,9 @@ void DataField::reserve(int64_t numBytes)
 }
 #endif
 
-void DataField::mergeMap()
+/*void DataField::mergeMap()
 {
 
-}
+}*/
 
 }

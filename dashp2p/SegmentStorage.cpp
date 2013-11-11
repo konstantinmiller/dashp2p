@@ -33,6 +33,9 @@
 
 namespace dashp2p {
 
+SegmentStorage::MpdMap SegmentStorage::mpdMap;
+SegmentStorage::SegMap SegmentStorage::segMap;
+
 string StreamPosition::toString() const
 {
     char tmp[1024];
@@ -40,7 +43,7 @@ string StreamPosition::toString() const
     return string(tmp);
 }
 
-
+#if 0
 SegmentStorage::SegmentStorage()
   : segMap()
 {
@@ -54,17 +57,22 @@ SegmentStorage::~SegmentStorage()
         segMap.erase(segMap.begin());
     }
 }
+#endif
 
-void SegmentStorage::clear()
+void SegmentStorage::cleanup()
 {
     /* Delete the segment map and free storage */
     while(!segMap.empty()) {
         delete segMap.begin()->second;
         segMap.erase(segMap.begin());
     }
+    while(!mpdMap.empty()) {
+        delete mpdMap.begin()->second;
+        mpdMap.erase(mpdMap.begin());
+    }
 }
 
-bool SegmentStorage::initialized(ContentIdSegment segId) const
+bool SegmentStorage::initialized(ContentIdSegment segId)
 {
     return (segMap.count(segId) > 0);
 }
@@ -75,7 +83,21 @@ void SegmentStorage::initSegment(ContentIdSegment segId, int64_t numBytes, int64
     dp2p_assert(segMap.insert(pair<ContentIdSegment, DashSegment*>(segId, dashSegment)).second);
 }
 
-void SegmentStorage::addData(ContentIdSegment segId, int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite)
+void SegmentStorage::setSize(const ContentId& segId, int64_t numBytes)
+{
+    switch(segId.getType()) {
+    case ContentType_Mpd:
+        mpdMap.at(dynamic_cast<ContentIdMpd&>(segId))->setSize(numBytes);
+        break;
+    case ContentType_Segment:
+        segMap.at(dynamic_cast<ContentIdSegment&>(segId))->setSize(numBytes);
+        break;
+    default:
+        THROW_RUNTIME("Unexpected ContentType: %d.", segId.getType());
+    }
+}
+
+void SegmentStorage::addData(const ContentId& segId, int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite)
 {
     getSegment(segId).setData(byteFrom, byteTo, srcBuffer, overwrite);
 }
@@ -109,7 +131,7 @@ StreamPosition SegmentStorage::getData(StreamPosition startPos, Contour contour,
     StreamPosition nextByte2Copy = startPos;
     while(bytesReturned[0] < std::min<int64_t>(bufferSize[0], availableData.second))
     {
-        const DashSegment& seg = getSegment(nextByte2Copy.segId);
+        DashSegment& seg = getSegment(nextByte2Copy.segId);
         const pair<int64_t, int64_t> copiedData = seg.getData(nextByte2Copy.byte, buffer[0] + bytesReturned[0], bufferSize[0] - bytesReturned[0]);
         dp2p_assert(copiedData.second > 0);
         bytesReturned[0] += copiedData.second;
@@ -210,28 +232,39 @@ StreamPosition SegmentStorage::getSegmentData(StreamPosition startPos, char** bu
 	return getData(startPos, contour, buffer, bufferSize, bytesReturned, usecReturned);
 }
 
-int64_t SegmentStorage::getTotalSize(ContentIdSegment segId) const
+int64_t SegmentStorage::getTotalSize(ContentIdSegment segId)
 {
     return getSegment(segId).getTotalSize();
 }
 
-int64_t SegmentStorage::getTotalDuration(ContentIdSegment segId) const
+int64_t SegmentStorage::getTotalDuration(ContentIdSegment segId)
 {
     return getSegment(segId).getTotalDuration();
 }
 
-const DashSegment& SegmentStorage::getSegment(ContentIdSegment segId) const
+DashSegment& SegmentStorage::getSegment(const ContentId& segId)
 {
-    SegMap::const_iterator it = segMap.find(segId);
-    if(it == segMap.end()) {
-        DBGMSG("Can't find segment (RepId: %d, SegNr: %d). Probably a bug.", segId.bitRate(), segId.segmentIndex());
-        dp2p_assert(0);
+    switch(segId.getType()) {
+    case ContentType_Mpd:
+    {
+        SegMap::const_iterator it = mpdMap.find(dynamic_cast<ContentIdMpd&>(segId));
+        if(it == mpdMap.end())
+            THROW_RUNTIME("Can't find segment %s. Probably a bug.", segId.toString().c_str());
+        return *it->second;
     }
-    const DashSegment* seg = it->second;
-    return *seg;
+    case ContentType_Segment:
+    {
+        SegMap::const_iterator it = segMap.find(dynamic_cast<ContentIdSegment&>(segId));
+        if(it == segMap.end())
+            THROW_RUNTIME("Can't find segment %s. Probably a bug.", segId.toString().c_str());
+        return *it->second;
+    }
+    default:
+        THROW_RUNTIME("Unexpected ContentType: %d.", segId.getType());
+    }
 }
 
-pair<int64_t, int64_t> SegmentStorage::getContigInterval(StreamPosition strPos, Contour contour) const
+pair<int64_t, int64_t> SegmentStorage::getContigInterval(StreamPosition strPos, Contour contour)
 {
     pair<int64_t, int64_t> availableData(0, 0);
 
@@ -244,7 +277,7 @@ pair<int64_t, int64_t> SegmentStorage::getContigInterval(StreamPosition strPos, 
     while(dataAvailable(strPos))
     {
         //DBGMSG("Checking (RepId: %d, SegNr: %d, offset: %"PRId64").", strPos.segId.repId(), strPos.segId.segNr(), strPos.byte);
-        const DashSegment& seg = getSegment(strPos.segId);
+        DashSegment& seg = getSegment(strPos.segId);
         pair<int64_t, int64_t> _availableData = seg.getContigInterval(strPos.byte);
         //DBGMSG("Available: %"PRId64" us, %"PRId64" byte. Total segment size: %"PRId64".", _availableData.first, _availableData.second, seg.getTotalSize());
         availableData.first += _availableData.first;
@@ -265,7 +298,7 @@ pair<int64_t, int64_t> SegmentStorage::getContigInterval(StreamPosition strPos, 
     return availableData;
 }
 
-bool SegmentStorage::dataAvailable(StreamPosition strPos) const
+bool SegmentStorage::dataAvailable(StreamPosition strPos)
 {
     SegMap::const_iterator it = segMap.find(strPos.segId);
     if(it == segMap.end())
@@ -273,14 +306,14 @@ bool SegmentStorage::dataAvailable(StreamPosition strPos) const
     return it->second->hasData(strPos.byte);
 }
 
-string SegmentStorage::printDownloadedData(int startSegNr, int64_t offset) const
+string SegmentStorage::printDownloadedData(int startSegNr, int64_t offset)
 {
     string ret;
     ret.reserve(2048);
     for(SegMap::const_iterator it = segMap.begin(); it != segMap.end(); ++it)
     {
         const ContentIdSegment& segId = it->first;
-        const DashSegment& seg = *it->second;
+        DashSegment& seg = *it->second;
         if(segId.segmentIndex() < startSegNr)
             continue;
         const string segData = (segId.segmentIndex() == startSegNr) ? seg.printDownloadedData(offset) : seg.printDownloadedData(0);
@@ -295,16 +328,16 @@ string SegmentStorage::printDownloadedData(int startSegNr, int64_t offset) const
     return ret;
 }
 
-void SegmentStorage::toFile (ContentIdSegment segId, string& fileName) const
+void SegmentStorage::toFile (ContentIdSegment segId, string& fileName)
 {
-	const DashSegment& ds = getSegment(segId);
+	DashSegment& ds = getSegment(segId);
 	ds.toFile(fileName);
 }
 
 /*
  * Private methods
  */
-
+#if 0
 DashSegment& SegmentStorage::getSegment(ContentIdSegment segId)
 {
     DBGMSG("Enter. Asking for segment (RepId: %d, SegNr: %d).", segId.bitRate(), segId.segmentIndex());
@@ -313,5 +346,6 @@ DashSegment& SegmentStorage::getSegment(ContentIdSegment segId)
     DashSegment* seg = it->second;
     return *seg;
 }
+#endif
 
 }

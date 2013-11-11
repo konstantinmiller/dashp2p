@@ -23,8 +23,9 @@
 #ifndef DATAFIELD_H_
 #define DATAFIELD_H_
 
+#include "ThreadAdapter.h"
 
-#include <stdint.h>
+#include <cstdint>
 #include <map>
 #include <string>
 using std::map;
@@ -40,19 +41,19 @@ public:
     virtual ~DataField();
     int64_t getReservedSize() const {return reservedSize;}
     int64_t getOccupiedSize() const {return occupiedSize;}
-    bool isOccupied(int64_t byteNr) const;
+    bool isOccupied(int64_t byteNr);
     void setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite);
-    int64_t getData(int64_t offset, char* buffer, int bufferSize) const;
+    int64_t getData(int64_t offset, char* buffer, int bufferSize);
     bool full() const;
-    char* getCopy(char* pCopy = NULL, int64_t size = 0) const;
-    int64_t getContigInterval(int64_t offset) const;
-    string printDownloadedData(int64_t offset) const;
-    void toFile(string& fileName) const ;
+    char* getCopy(char* pCopy = NULL, int64_t size = 0);
+    int64_t getContigInterval(int64_t offset);
+    string printDownloadedData(int64_t offset);
+    void toFile(string& fileName);
 
 /* Private methods */
 private:
     //void reserve(int64_t numBytes);
-    void mergeMap();
+    //void mergeMap();
 
 /* Private types */
 private:
@@ -65,6 +66,7 @@ private:
     int64_t reservedSize;
     int64_t occupiedSize;
     DataMap dataMap;
+    Mutex mutex;
 };
 
 }

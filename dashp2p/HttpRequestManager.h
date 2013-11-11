@@ -153,7 +153,7 @@ private:
 		bool     hdrCompleted;
 
 		int64_t pldBytesReceived;
-		char* pldBytes; // TODO: make pldBytes pointing directly into SegmentStorage in order to avoid copying
+		//char* pldBytes; // TODO: make pldBytes pointing directly into SegmentStorage in order to avoid copying
 		DownloadProcess* downloadProcess; // ([us],[byte])
 
 		int64_t tsSent;
