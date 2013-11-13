@@ -219,6 +219,7 @@ static int Open( vlc_object_t *p_this )
     }
 
     /* Initializing the Control module, which starts to retrieve data. */
+    SegmentStorage::init();
     const ControlType _controlType = (ControlType)controlType;
     Control::init(mpdUrl, windowWidth, windowHeight, _controlType, adaptationConfig);
 
@@ -273,6 +274,7 @@ static void Close( vlc_object_t *p_this )
     TcpConnectionManager::cleanup();
     SourceManager::cleanup();
     MpdWrapper::cleanup();
+    SegmentStorage::cleanup();
 
     DBGMSG("The End.");
 

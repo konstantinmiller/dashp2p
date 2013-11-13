@@ -112,7 +112,7 @@ protected:
 
     /***** HTTP related stuff *****/
     //void readFromSocket(int bytesExpected);
-    void processNewData(bool socketDisconnected);
+    void processNewData();
     void requeuePendingRequests(int numAllowed);
     /* Check if new requests can be send and send the appropriate number of them.
      * Must run in the main thread!

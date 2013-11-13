@@ -90,7 +90,7 @@ protected:
     virtual IfData getInitialIf() const {return ifData.at(0);}
 
     virtual unsigned getIndex(int bitrate);
-    virtual void processEventDataReceivedMpd_Completed();
+    virtual void processEventDataReceivedMpd_Completed(const ContentIdMpd& contentIdMpd);
     virtual ControlLogicAction* createActionDownloadSegments(list<const ContentId*> segIds, const TcpConnectionId& tcpConnectionId, HttpMethod httpMethod) const;
 
 /* Protected types */
@@ -114,7 +114,7 @@ protected:
     Contour contour;
 
     //MpdWrapper* mpdWrapper;
-    DataField* mpdDataField;
+    //DataField* mpdDataField;
 
     ActionList pendingActions;
 };

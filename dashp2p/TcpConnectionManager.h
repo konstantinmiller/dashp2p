@@ -39,6 +39,7 @@ public:
     TcpConnectionId(const int& id = -1): id(id) {}
     bool operator==(const TcpConnectionId& other) const {return other.id == id;}
     bool operator!=(const TcpConnectionId& other) const {return !(other == *this);}
+    bool operator<(const TcpConnectionId& other) const {return id < other.id;}
     int numeric() const {return id;} // TODO: replace by casting operator
     operator string() const {return std::to_string(id);}
 private:

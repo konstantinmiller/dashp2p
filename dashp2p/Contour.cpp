@@ -78,7 +78,8 @@ ContentIdSegment Contour::getNext(const ContentIdSegment& segId) const
 
     range = c.equal_range(segNext.segmentIndex());
     if(range.first == c.end() || distance(range.first, range.second) != 1) {
-        DBGMSG("Asked for next segment in the contour for (RepId: %d, SegNr: %d). Map contains (RepId: %d, SegNr: %d). Probably a bug.", segId.bitRate(), segId.segmentIndex(), segNext.bitRate(), segNext.segmentIndex());
+        DBGMSG("Asked for next segment in the contour for (RepId: %d, SegNr: %d). Map contains (RepId: %d, SegNr: %d). Probably a bug.",
+                segId.bitRate(), segId.segmentIndex(), segNext.bitRate(), segNext.segmentIndex());
         dp2p_assert(0);
     }
     return segNext;

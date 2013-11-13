@@ -633,7 +633,7 @@ void Control::httpDataReceived_Mpd(HttpEventDataReceived& e)
 	ThreadAdapter::mutexLock(&eventsMutex);
 	dp2p_assert(HttpRequestManager::getHttpMethod(e.reqId) == HttpMethod_GET && state == ControlState_Playing && HttpRequestManager::getContentLength(e.reqId) > 0);
 	DBGMSG("Got (piece of) the MPD, ContentId: %s.", HttpRequestManager::getContentId(e.reqId).toString().c_str());
-	events.push_back(new ControlLogicEventDataReceived(e.tcpConnectionId, e.reqId, e.byteFrom, e.byteTo, pair<int64_t, int64_t>(0,0), e.socketDisconnected));
+	events.push_back(new ControlLogicEventDataReceived(e.tcpConnectionId, e.reqId, e.byteFrom, e.byteTo, pair<int64_t, int64_t>(0,0)));
 	uint64_t buf = 1;
 	dp2p_assert(8 == write(fdEvents, &buf, 8));
 	DBGMSG("Added new ControlLogicEventDataReceived to the event list.");
@@ -694,7 +694,8 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 			return;
 		break;
 	case HttpMethod_HEAD:
-		DBGMSG("Received HEAD of segment %d (request nr. %d). Payload: %" PRId64 ".", segId.segmentIndex(), e.reqId, HttpRequestManager::getContentLength(e.reqId));
+		DBGMSG("Received HEAD of segment %d (request nr. %d). Payload: %" PRId64 ".",
+		        segId.segmentIndex(), e.reqId, HttpRequestManager::getContentLength(e.reqId));
 		break;
 	default:
 		dp2p_assert_v(false, "Unknown HTTP method: %d. Bug?", HttpRequestManager::getHttpMethod(e.reqId));
@@ -710,7 +711,6 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 		return;
 	}*/
 
-	hier weitermachen: check if mutex can be abandonded from Control. instead, protect SegmentStorage internally by mutexes
 	ThreadAdapter::mutexLock(&mutex);
 	DBGMSG("Locked mutex.");
 
@@ -785,7 +785,7 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 	ThreadAdapter::mutexUnlock(&mutex);
 
 	ThreadAdapter::mutexLock(&eventsMutex);
-	events.push_back(new ControlLogicEventDataReceived(e.tcpConnectionId, e.reqId, e.byteFrom, e.byteTo, availableContigInterval, e.socketDisconnected));
+	events.push_back(new ControlLogicEventDataReceived(e.tcpConnectionId, e.reqId, e.byteFrom, e.byteTo, availableContigInterval));
 	uint64_t buf = 1;
 	dp2p_assert(8 == write(fdEvents, &buf, 8));
 	DBGMSG("Added new ControlLogicEventDataReceived to the event list.");
@@ -1257,7 +1257,7 @@ void Control::resumePlayback()
     if(!SegmentStorage::dataAvailable(nextPos)) {
         ERRMSG("Bug?");
         DBGMSG("Current position: %s.", curPos.toString().c_str());
-        DBGMSG("Downloaded data:\n%s", SegmentStorage::printDownloadedData(0, 0).c_str());
+        //DBGMSG("Downloaded data:\n%s", SegmentStorage::printDownloadedData(0, 0).c_str());
         exit(1);
     }
 

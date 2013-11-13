@@ -66,12 +66,12 @@ public:
 class HttpEventDataReceived: public HttpEvent
 {
 public:
-	HttpEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo, bool socketDisconnected)
+	HttpEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo/*, bool socketDisconnected*/)
 	  : HttpEvent(tcpConnectionId),
 	    byteFrom(byteFrom),
 	    byteTo(byteTo),
-	    reqId(reqId),
-	    socketDisconnected(socketDisconnected) {}
+	    reqId(reqId)//, socketDisconnected(socketDisconnected)
+        {}
 	virtual ~HttpEventDataReceived() {}
 	virtual HttpEventType getType() const {return HttpEvent_DataReceived;}
 
@@ -79,7 +79,7 @@ public:
 	const int64_t byteFrom;
 	const int64_t byteTo;
 	const int reqId;
-	const bool socketDisconnected;
+	//const bool socketDisconnected;
 };
 
 

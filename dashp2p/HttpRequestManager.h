@@ -86,7 +86,7 @@ public:
 	static HttpMethod getHttpMethod(int reqId);
 	static int64_t getContentLength(int reqId);
 	static const ContentId& getContentId(int reqId);
-	static const char* getPldBytes(int reqId);
+	//static const char* getPldBytes(int reqId);
 	static int64_t getPldBytesReceived(int reqId);
 	static const char* getHdrBytes(int reqId);
     static unsigned getHdrBytesReceived(int reqId);
@@ -124,9 +124,9 @@ private:
 
 		virtual ~HttpRequest();
 
-		const ContentId& getContentId() const {return *contentId;}
-		ContentType getContentType() const {return contentId->getType();}
-		char* getContentCopy() const;
+		//ContentId& getContentId() {return contentId;}
+		ContentType getContentType() const {return contentId.getType();}
+		//char* getContentCopy() const;
 
 		void recordDownloadProgress(const DownloadProcessElement& el);
 		bool sent() const {return (tsSent != -1);}
@@ -160,9 +160,9 @@ private:
 		int64_t tsFirstByte;
 		int64_t tsLastByte;
 
-	private:
-		const ContentId* const contentId;
+		const ContentId& contentId;
 
+	private:
 		static unsigned nextReqId;
 	};
 

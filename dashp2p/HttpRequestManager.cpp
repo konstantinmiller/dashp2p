@@ -21,6 +21,7 @@
  ****************************************************************************/
 
 #include "HttpRequestManager.h"
+#include "SegmentStorage.h"
 //#include "Dashp2pTypes.h"
 
 #include <cassert>
@@ -78,7 +79,7 @@ void HttpRequestManager::appendPldBytes(int reqId, const void* p, int newPldByte
 	HttpRequest* req = reqs.at(reqId / s)->at(reqId % s);
 
 	if(req->pldBytesReceived == 0)
-	    SegmentStorage::setSize(req->getContentId(), req->hdr.contentLength);
+	    SegmentStorage::setSize(req->contentId, req->hdr.contentLength);
 
 	if(req->pldBytesReceived + newPldBytes == req->hdr.contentLength)
 		req->tsLastByte = recvTimestamp;
@@ -86,7 +87,7 @@ void HttpRequestManager::appendPldBytes(int reqId, const void* p, int newPldByte
 	//	req->pldBytes = new char[req->hdr.contentLength];
 	//memcpy(req->pldBytes + req->pldBytesReceived, p, newPldBytes);
 	const bool overwrite = true;
-	SegmentStorage::addData(req->getContentId(), req->pldBytesReceived, req->pldBytesReceived + newPldBytes - 1, (char*)p, overwrite);
+	SegmentStorage::addData(req->contentId, req->pldBytesReceived, req->pldBytesReceived + newPldBytes - 1, (char*)p, overwrite);
 	req->pldBytesReceived += newPldBytes;
 }
 
@@ -211,13 +212,13 @@ int64_t HttpRequestManager::getContentLength(int reqId)
 
 const ContentId& HttpRequestManager::getContentId(int reqId)
 {
-	return reqs.at(reqId / s)->at(reqId % s)->getContentId();
+	return reqs.at(reqId / s)->at(reqId % s)->contentId;
 }
 
-const char* HttpRequestManager::getPldBytes(int reqId)
+/*const char* HttpRequestManager::getPldBytes(int reqId)
 {
 	return reqs.at(reqId / s)->at(reqId % s)->pldBytes;
-}
+}*/
 
 int64_t HttpRequestManager::getPldBytesReceived(int reqId)
 {
@@ -312,6 +313,8 @@ void HttpRequestManager::cleanup()
 		for(size_t j = 0; j < reqs.at(i)->size(); ++j) {
 			delete reqs.at(i)->at(j);
 		}
+		delete reqs.at(i);
+		reqs.at(i) = nullptr;
 	}
 
 	ThreadAdapter::mutexUnlock(&mutex);
@@ -335,12 +338,12 @@ HttpRequestManager::HttpRequest::HttpRequest(const TcpConnectionId& tcpConnectio
     hdrBytes(NULL),
     hdrCompleted(false),
     pldBytesReceived(0),
-    pldBytes(NULL),
+    //pldBytes(NULL),
     downloadProcess(NULL),
     tsSent(-1),
     tsFirstByte(-1),
     tsLastByte(-1),
-    contentId(contentId)
+    contentId(*contentId)
 {
 	dp2p_assert(contentId);
 
@@ -353,26 +356,26 @@ HttpRequestManager::HttpRequest::HttpRequest(const TcpConnectionId& tcpConnectio
 
 HttpRequestManager::HttpRequest::~HttpRequest()
 {
-	delete contentId;
+	delete &contentId;
 
     if(hdrBytes)
         delete [] hdrBytes;
 
-    if(pldBytes)
-    	delete [] pldBytes;
+    //if(pldBytes)
+    //	delete [] pldBytes;
 
     if(downloadProcess)
         delete downloadProcess;
 }
 
-char* HttpRequestManager::HttpRequest::getContentCopy() const
+/*char* HttpRequestManager::HttpRequest::getContentCopy() const
 {
 	dp2p_assert(completed());
 	char* buf = new char[pldBytesReceived];
 	dp2p_assert(buf);
 	memcpy(buf, pldBytes, pldBytesReceived);
 	return buf;
-}
+}*/
 
 void HttpRequestManager::HttpRequest::recordDownloadProgress(const DownloadProcessElement& el)
 {

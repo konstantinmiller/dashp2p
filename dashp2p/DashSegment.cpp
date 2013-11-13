@@ -28,16 +28,21 @@
 
 namespace dashp2p {
 
-DashSegment::DashSegment(const ContentIdSegment& segId, int64_t numBytes, int64_t duration)
-  : segId(segId),
-    dataField(nullptr),
-    duration(duration)
+DashObject::DashObject(const ContentId& contentId, int64_t numBytes)
+  : contentId(*contentId.copy()),
+    dataField(nullptr)
 {
     if(numBytes > 0)
         dataField = new DataField(numBytes);
 }
 
-void DashSegment::setSize(int64_t s)
+DashObject::~DashObject()
+{
+    delete &contentId;
+    delete dataField;
+}
+
+void DashObject::setSize(int64_t s)
 {
     if(dataField == nullptr)
         dataField = new DataField(s);
@@ -45,37 +50,38 @@ void DashSegment::setSize(int64_t s)
         dp2p_assert(dataField->getReservedSize() == s);
 }
 
-void DashSegment::setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite)
+void DashObject::setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite)
 {
-    DBGMSG("Adding data to (RepId %d, SegNr %d) at [%" PRId64 ", %" PRId64 "] with%s overwriting.",
-            segId.bitRate(), segId.bitRate(), byteFrom, byteTo, overwrite?" potential":"out");
+    DBGMSG("Adding data to %s at [%" PRId64 ", %" PRId64 "] with%s overwriting.",
+            contentId.toString().c_str(), byteFrom, byteTo, overwrite?" potential":"out");
     dataField->setData(byteFrom, byteTo, srcBuffer, overwrite);
-    //DBGMSG("Return.");
+    //DBGMSG("Done.");
 }
 
-pair<int64_t, int64_t> DashSegment::getData(int64_t offset, char* buffer, int bufferSize)
+int64_t DashObject::getData(int64_t offset, char* buffer, int bufferSize)
 {
-    const int64_t numCopiedBytes = dataField->getData(offset, buffer, bufferSize);
-    const int64_t numCopiedUsecs = (numCopiedBytes * getTotalDuration()) / getTotalSize();
-    return pair<int64_t, int64_t>(numCopiedUsecs, numCopiedBytes);
+    //const int64_t numCopiedBytes = dataField->getData(offset, buffer, bufferSize);
+    //const int64_t numCopiedUsecs = (numCopiedBytes * duration) / getTotalSize();
+    //return pair<int64_t, int64_t>(numCopiedUsecs, numCopiedBytes);
+    return dataField->getData(offset, buffer, bufferSize);
 }
 
-int64_t DashSegment::getTotalSize() const
+int64_t DashObject::getTotalSize() const
 {
     return dataField->getReservedSize();
+}
+
+void DashObject::toFile(string& fileName)
+{
+	dataField->toFile(fileName);
 }
 
 pair<int64_t, int64_t> DashSegment::getContigInterval(int64_t offset)
 {
     pair<int64_t, int64_t> ret;
     ret.second = dataField->getContigInterval(offset);
-    ret.first = (ret.second * getTotalDuration()) / getTotalSize();
+    ret.first = (ret.second * duration) / getTotalSize();
     return ret;
-}
-
-void DashSegment::toFile(string& fileName)
-{
-	dataField->toFile(fileName);
 }
 
 }

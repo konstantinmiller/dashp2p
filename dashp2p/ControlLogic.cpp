@@ -41,7 +41,7 @@ ControlLogic::ControlLogic(int width, int height)
     ifData(),
     contour(),
     //mpdWrapper(nullptr),
-    mpdDataField(nullptr),
+    //mpdDataField(nullptr),
     pendingActions()
 {
 	ThreadAdapter::mutexInit(&mutex);
@@ -52,7 +52,7 @@ ControlLogic::~ControlLogic()
 	DBGMSG("Clean-up. Have %d pending actions.", pendingActions.size());
 	ThreadAdapter::mutexDestroy(&mutex);
 	//delete mpdWrapper;
-	delete mpdDataField;
+	//delete mpdDataField;
 	while(!pendingActions.empty()) {
 		delete pendingActions.front();
 		pendingActions.pop_front();
@@ -346,9 +346,9 @@ unsigned ControlLogic::getIndex(int bitrate)
     return 0;
 }
 
-void ControlLogic::processEventDataReceivedMpd_Completed()
+void ControlLogic::processEventDataReceivedMpd_Completed(const ContentIdMpd& contentIdMpd)
 {
-	dp2p_assert(mpdDataField->full());
+	//dp2p_assert(mpdDataField->full());
 
 #if 0
 	FILE* f = fopen("dbg_mpd.txt", "w");
@@ -362,9 +362,10 @@ void ControlLogic::processEventDataReceivedMpd_Completed()
 	Statistics::recordScalarD64("completedDownloadMPD", dashp2p::Utilities::getTime());
 
 	/* Parse MPD */
-	MpdWrapper::init(mpdDataField->getCopy((char*)malloc(mpdDataField->getReservedSize() * sizeof(char)), mpdDataField->getReservedSize()), mpdDataField->getReservedSize()); // we reserve this memory with malloc since it will be freed by the VLC XML plugin which uses free()
-	delete mpdDataField;
-	mpdDataField = nullptr;
+	//MpdWrapper::init(mpdDataField->getCopy((char*)malloc(mpdDataField->getReservedSize() * sizeof(char)), mpdDataField->getReservedSize()), mpdDataField->getReservedSize()); // we reserve this memory with malloc since it will be freed by the VLC XML plugin which uses free()
+	MpdWrapper::init(contentIdMpd);
+	//delete mpdDataField;
+	//mpdDataField = nullptr;
 
 	/* Logging. */
 	DBGMSG("Parsed MPD file.");
@@ -428,7 +429,7 @@ ControlLogicAction* ControlLogic::createActionDownloadSegments(list<const Conten
 {
 	list<dashp2p::URL> urls;
 	list<HttpMethod> httpMethods;
-	for(list<const ContentId*>::const_iterator it = segIds.begin(); it != segIds.end(); ++it)
+	for(list<const ContentId*>::iterator it = segIds.begin(); it != segIds.end(); ++it)
 	{
 	    const ContentIdSegment& segId = *dynamic_cast<const ContentIdSegment*>(*it);
 

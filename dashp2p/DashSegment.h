@@ -32,30 +32,38 @@ using std::pair;
 
 namespace dashp2p {
 
+/* Base class */
+class DashObject
+{
+public:
+    DashObject(const ContentId& contentId, int64_t numBytes = -1);
+    virtual ~DashObject();
+    void setSize(int64_t s);
+    void setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite);
+    int64_t getData(int64_t offset, char* buffer, int bufferSize);
+    int64_t getTotalSize() const;
+    bool completed() const {return dataField && dataField->full();}
+    bool hasData(int64_t byteNr) {return dataField && dataField->isOccupied(byteNr);}
+    string printDownloadedData(int64_t offset) {return dataField->printDownloadedData(offset);}
+    void toFile(string& fileName);
+public:
+    const ContentId& contentId;
+protected:
+    DataField* dataField;
+};
+
 /* Type for storing information about a segment. */
-class DashSegment
+class DashSegment: public DashObject
 {
 /* Public methods */
 public:
-    DashSegment(const ContentIdSegment& segId, int64_t numBytes, int64_t duration);
-    ~DashSegment(){delete dataField;}
-    void setSize(int64_t s);
-    void setData(int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite);
-    pair<int64_t, int64_t> getData(int64_t offset, char* buffer, int bufferSize);
-    int64_t getTotalSize() const;
-    int64_t getTotalDuration() const {return duration;}
-    bool completed() const {return dataField && dataField->full();}
-    bool hasData(int64_t byteNr) {return dataField && dataField->isOccupied(byteNr);}
+    DashSegment(const ContentIdSegment& segId, int64_t numBytes, int64_t duration):
+        DashObject(segId, numBytes), segId(dynamic_cast<const ContentIdSegment&>(contentId)), duration(duration) {}
+    virtual ~DashSegment(){}
+    //int64_t getTotalDuration() const {return duration;}
     pair<int64_t, int64_t> getContigInterval(int64_t offset);
-    string printDownloadedData(int64_t offset) {return dataField->printDownloadedData(offset);}
-    void toFile(string& fileName);
-
 public:
-    const ContentIdSegment segId;
-
-/* Private members */
-private:
-    DataField* dataField;
+    const ContentIdSegment& segId;
     const int64_t duration;
 };
 

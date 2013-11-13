@@ -27,6 +27,7 @@
 #include "MpdWrapper.h"
 #include "XmlAdapter.h"
 #include "DebugAdapter.h"
+#include "SegmentStorage.h"
 //#include <cinttypes>
 #include <limits>
 
@@ -34,10 +35,16 @@ namespace dashp2p {
 
 dashp2p::mpd::MediaPresentationDescription* MpdWrapper::mpd = nullptr;
 
-void MpdWrapper::init(char* p, int size)
+//void MpdWrapper::init(char* p, int size)
+void MpdWrapper::init(const ContentIdMpd& contentIdMpd)
 {
     assert(!mpd);
-    mpd = XmlAdapter::parseMpd(p,size);
+
+    const int64_t s = SegmentStorage::get(contentIdMpd).getTotalSize();
+    char* p = new char[s];
+    dp2p_assert(SegmentStorage::get(contentIdMpd).getData(0, p, s) == s);
+
+    mpd = XmlAdapter::parseMpd(p, s);
 #if 0
     /* caching for faster/easier access later */
     vector<pair<unsigned,unsigned> > resolutions = mpd->getSpatialResolutions();

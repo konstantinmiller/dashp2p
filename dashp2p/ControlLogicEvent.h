@@ -95,14 +95,13 @@ class ControlLogicEventDataReceived: public ControlLogicEvent
 {
 public:
     ControlLogicEventDataReceived(const TcpConnectionId& tcpConnectionId, int reqId, int64_t byteFrom, int64_t byteTo,
-            pair<int64_t, int64_t> availableContigInterval, bool socketDisconnected)
+            pair<int64_t, int64_t> availableContigInterval)
       : ControlLogicEvent(),
         tcpConnectionId(tcpConnectionId),
         reqId(reqId),
         byteFrom(byteFrom),
         byteTo(byteTo),
-        availableContigInterval(availableContigInterval),
-        socketDisconnected(socketDisconnected)
+        availableContigInterval(availableContigInterval)
     {}
     virtual ~ControlLogicEventDataReceived() {}
     virtual ControlLogicEventType getType() const {return Event_DataReceived;}
@@ -113,7 +112,7 @@ public:
     const int64_t byteFrom;
     const int64_t byteTo;
     const pair<int64_t, int64_t> availableContigInterval;
-    const bool socketDisconnected;
+    //const bool socketDisconnected;
 };
 
 

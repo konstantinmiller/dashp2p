@@ -107,7 +107,11 @@ ControlLogicST::ControlLogicST(int width, int height, const std::string& config)
 
 ControlLogicST::~ControlLogicST()
 {
-    delete betaTimeSeries; betaTimeSeries = nullptr;
+    delete betaTimeSeries;
+    while(!delayedRequests.empty()) {
+        delete delayedRequests.front();
+        delayedRequests.pop_front();
+    }
 }
 
 #if 0
@@ -154,18 +158,19 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedMpd(ControlLog
 
 	list<ControlLogicAction*> actions;
 
-	if(mpdDataField == nullptr) {
+	/*if(mpdDataField == nullptr) {
 		dp2p_assert(e.byteFrom == 0);
 		mpdDataField = new DataField(HttpRequestManager::getContentLength(e.reqId));
 		dp2p_assert(mpdDataField);
-	}
+	}*/
 
-	dp2p_assert(!mpdDataField->full());
+	//dp2p_assert(!mpdDataField->full());
 
-	mpdDataField->setData(e.byteFrom, e.byteTo, HttpRequestManager::getPldBytes(e.reqId) + e.byteFrom, false);
+	//mpdDataField->setData(e.byteFrom, e.byteTo, HttpRequestManager::getPldBytes(e.reqId) + e.byteFrom, false);
 
-	if(mpdDataField->full()) {
-		processEventDataReceivedMpd_Completed();
+	//if(mpdDataField->full()) {
+	if(HttpRequestManager::isCompleted(e.reqId)) {
+		processEventDataReceivedMpd_Completed(dynamic_cast<const ContentIdMpd&>(HttpRequestManager::getContentId(e.reqId)));
 		ackActionRequestCompleted(HttpRequestManager::getContentId(e.reqId));
 		Statistics::recordRequestStatistics(tcpConnectionId, e.reqId);
 	} else {
@@ -289,7 +294,9 @@ list<ControlLogicAction*> ControlLogicST::processEventDataReceivedSegment(Contro
 	contour.setNext(*segNext);
 
 	/* re-connect if necessary */
-	if(e.socketDisconnected) {
+	if(TcpConnectionManager::get(tcpConnectionId).keepAliveMaxRemaining == 0)
+	{
+	    DBGMSG("Server won't accept further requests over this TCP connection. Have to re-connect.");
 	    const list<int> unfinishedRequests = HttpClientManager::get(tcpConnectionId).clearUnfinishedRequests();
 	    assert(unfinishedRequests.empty());
 	    /* get source ID of the closed TCP connection */
@@ -321,6 +328,13 @@ list<ControlLogicAction*> ControlLogicST::processEventDisconnect(const ControlLo
 {
 	DBGMSG("Event: %s.", e.toString().c_str());
 
+	list<ControlLogicAction*> actions;
+
+	if(e.tcpConnectionId < tcpConnectionId) {
+	    DBGMSG("We have already re-connected.");
+	    return actions;
+	}
+
 	dp2p_assert_v(e.tcpConnectionId == tcpConnectionId, "e.tcpConnectionId: %d, tcpConnectionId: %d", e.tcpConnectionId, tcpConnectionId);
 
 	/* get content IDs of unfinished requests */
@@ -341,7 +355,6 @@ list<ControlLogicAction*> ControlLogicST::processEventDisconnect(const ControlLo
 	HttpClientManager::create(tcpConnectionId, Control::httpCb);
 
 	/* restart downloads of unfinished requests */
-	list<ControlLogicAction*> actions;
 	if(!contentIds.empty())
 	    actions.push_back(createActionDownloadSegments(contentIds, tcpConnectionId, HttpMethod_GET));
 
@@ -425,6 +438,13 @@ list<ControlLogicAction*> ControlLogicST::processEventStartPlayback(const Contro
 	HttpClientManager::create(tcpConnectionId, Control::httpCb);
 
 	//actions.push_back(new ControlLogicActionOpenTcpConnection(connId));
+
+	if(!SegmentStorage::initialized(ContentIdMpd())) {
+	    DBGMSG("Segment not yet available in the storage. Initializing.");
+	    SegmentStorage::initSegment(ContentIdMpd());
+	} else {
+	    DBGMSG("Segment aleady registered in the storage module.");
+	}
 
 	/* Start MPD download */
 	list<const ContentId*> contentIds(1, new ContentIdMpd);

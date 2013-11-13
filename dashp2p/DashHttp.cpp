@@ -168,18 +168,18 @@ void DashHttp::threadMain()
         	TcpConnectionManager::logTCPState(tcpConnectionId, "before recv");
         	const int bytesReceived = TcpConnectionManager::get(tcpConnectionId).read();
         	TcpConnectionManager::logTCPState(tcpConnectionId, "after recv");
-        	const bool socketDisconnected = TcpConnectionManager::get(tcpConnectionId).state() != TCP_ESTABLISHED;
+        	//const bool socketDisconnected = TcpConnectionManager::get(tcpConnectionId).state() != TCP_ESTABLISHED;
 
         	if(bytesReceived > 0) {
-        		processNewData(socketDisconnected);
-        	    if(socketDisconnected) {
+        		processNewData();
+        	    /*if(socketDisconnected) {
         	        ThreadAdapter::mutexLock(&newReqsMutex);
         	        dp2p_assert_v(state == DashHttpState_Constructed, "state: %d", state);
         	        state = DashHttpState_NotAcceptingRequests;
         	        ThreadAdapter::mutexUnlock(&newReqsMutex);
         	        break;
-        	    }
-        	} else if(socketDisconnected) { // || (serverInfo.keepAliveMaxRemaining == 0 && getNumPendingRequests() == 0)) {
+        	    }*/
+        	} else if(TcpConnectionManager::get(tcpConnectionId).state() != TCP_ESTABLISHED) { // || (serverInfo.keepAliveMaxRemaining == 0 && getNumPendingRequests() == 0)) {
         		reportDisconnect();
         		break;
         		//WARNMSG("[%s] Socket disconnected. Forced re-connect.", Utilities::getTimeString(0, false).c_str());
@@ -343,7 +343,7 @@ DashHttp::InternalEvent DashHttp::waitForEvents(const int64_t& to)
 	FD_SET(fdWakeUpSelect, &fdSetRead);
 	nfds = max<int>(nfds, fdWakeUpSelect);
 
-	DBGMSG("Going to select() for up to %gs.", Utilities::getTimeString(0, false).c_str(), to / 1e6);
+	DBGMSG("Going to select() for up to %gs.", to / 1e6);
 
 	const int64_t ticBeforeSelect = Utilities::getAbsTime();
 	struct timeval _to = Utilities::usec2tv(to);
@@ -383,7 +383,7 @@ bool DashHttp::checkIfHaveNewRequests()
 void DashHttp::reportDisconnect()
 {
 	ThreadAdapter::mutexLock(&newReqsMutex);
-	dp2p_assert_v(state == DashHttpState_Constructed, "state: %d", state);
+	dp2p_assert_v(state == DashHttpState_Constructed || state == DashHttpState_NotAcceptingRequests, "state: %d", state);
 	state = DashHttpState_NotAcceptingRequests;
 	//if(!newReqs.empty()) {
 	//	uint64_t numNewReqs = 0;
@@ -601,7 +601,7 @@ void DashHttp::readFromSocket(int bytesExpected)
 }
 #endif
 
-void DashHttp::processNewData(bool socketDisconnected)
+void DashHttp::processNewData()
 {
 	TcpConnection& tc = TcpConnectionManager::get(tcpConnectionId);
 	SourceData& sd = SourceManager::get(tc.srcId);
@@ -617,7 +617,7 @@ void DashHttp::processNewData(bool socketDisconnected)
         int reqId = reqQueue.front();
 
         //const int hdrBytesBefore = req->hdrBytesReceived;
-        const int pldBytesBefore = HttpRequestManager::getPldBytesReceived(reqId);
+        //const int pldBytesBefore = HttpRequestManager::getPldBytesReceived(reqId);
         const int parsed = parseData(tc.recvBuf + recvBufProcessed, tc.recvBufContent - recvBufProcessed, reqId, tc.recvTimestamp);
 
         /* If header completed */
@@ -694,9 +694,17 @@ void DashHttp::processNewData(bool socketDisconnected)
             DBGMSG("Request %d completed. Total over current TCP connection: %d.", reqId, tc.numReqsCompleted);
 
             reqQueue.pop_front();
+
+            if(tc.keepAliveMaxRemaining == 0 || hdr.connectionClose == 1) {
+                ThreadAdapter::mutexLock(&newReqsMutex);
+                dp2p_assert_v(state == DashHttpState_Constructed, "state: %d", state);
+                state = DashHttpState_NotAcceptingRequests;
+                ThreadAdapter::mutexUnlock(&newReqsMutex);
+            }
         }
 
         /* If at least the header is completed, give data to the user. */
+#if 0
         if(HttpRequestManager::isHdrCompleted(reqId) && HttpRequestManager::getPldBytesReceived(reqId) > 0) {
         	HttpEventDataReceived* eventDataReceived = new HttpEventDataReceived(tcpConnectionId, reqId, pldBytesBefore,
         	        HttpRequestManager::getPldBytesReceived(reqId) - 1, socketDisconnected);
@@ -711,6 +719,16 @@ void DashHttp::processNewData(bool socketDisconnected)
         	DBGMSG("cb() returned.");
         	//cb(req->reqId, ifData.name, NULL, 0, 0, req->hdr.contentLength);
         }
+#endif
+        /* Notify Control if request completed */
+        if(HttpRequestManager::isCompleted(reqId)) {
+            HttpEventDataReceived* eventDataReceived = new HttpEventDataReceived(tcpConnectionId, reqId, 0,
+                    HttpRequestManager::getPldBytesReceived(reqId) - 1);
+            DBGMSG("Before cb().");
+            cb(eventDataReceived);
+            DBGMSG("cb() returned.");
+        }
+
     }
     tc.recvBufContent = 0;
 

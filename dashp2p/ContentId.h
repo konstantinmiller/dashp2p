@@ -45,11 +45,12 @@ protected:
 
 public:
 	virtual ~ContentId(){};
-	virtual ContentId* copy() const = 0;
-	virtual ContentType getType() const = 0;
-	virtual string toString() const = 0;
-	virtual bool operator==(const ContentId& other) const = 0;
-	virtual bool operator!=(const ContentId& other) const {return !operator==(other);}
+	virtual ContentId* copy() const = 0; //{THROW_RUNTIME("Must not create ContentId objects."); abort();}
+	virtual ContentType getType() const = 0; //{THROW_RUNTIME("Must not create ContentId objects."); abort();}
+	virtual string toString() const = 0; //{THROW_RUNTIME("Must not create ContentId objects."); abort();}
+	virtual bool operator==(const ContentId& other) const = 0; //{dp2p_assert(getType() != other.getType()); return false;}
+	virtual bool operator!=(const ContentId& other) const = 0; //{return ! this->operator ==(other);}
+	virtual bool operator<(const ContentId& other) const = 0;
 };
 
 
@@ -61,20 +62,24 @@ public:
 	virtual ContentIdMpd* copy() const {return new ContentIdMpd;}
 	virtual ContentType getType() const {return ContentType_Mpd;}
 	virtual string toString() const {return "MPD";}
-	bool operator==(const ContentId& other) const {if(other.getType() == ContentType_Mpd) return operator==(dynamic_cast<const ContentIdMpd&>(other)); else return false;}
+	virtual bool operator==(const ContentId& other) const;
 	virtual bool operator==(const ContentIdMpd& /*other*/) const {return true;}
-	//virtual bool operator!=(const ContentIdMpd& other) const {return !operator==(other);}
+	virtual bool operator!=(const ContentId& other) const {return ! operator==(other);}
+	virtual bool operator!=(const ContentIdMpd& other) const {return ! operator==(other);}
+	virtual bool operator<(const ContentId& other) const {return getType() < other.getType();}
+	virtual bool operator<(const ContentIdMpd& /*other*/) const {return false;}
 };
 
 
 class ContentIdSegment: public ContentId
 {
 public:
-	ContentIdSegment(int periodIndex, int adaptationSetIndex, int bitRate, int segmentIndex): _periodIndex(periodIndex), _adaptationSetIndex(adaptationSetIndex), _bitRate(bitRate), _segmentIndex(segmentIndex) {}
+	ContentIdSegment(int periodIndex, int adaptationSetIndex, int bitRate, int segmentIndex):
+	    _periodIndex(periodIndex), _adaptationSetIndex(adaptationSetIndex), _bitRate(bitRate), _segmentIndex(segmentIndex) {}
 	virtual ~ContentIdSegment() {}
 	virtual ContentIdSegment* copy() const {return new ContentIdSegment(*this);}
 	virtual ContentType getType() const {return ContentType_Segment;}
-	virtual string toString() const {ostringstream oss; oss << "SegId(" << _periodIndex << "," << _adaptationSetIndex << "," << _bitRate << "," << _segmentIndex << ")"; return oss.str();}
+	virtual string toString() const;
 
 	int periodIndex() const {return _periodIndex;}
 	int adaptationSetIndex() const {return _adaptationSetIndex;}
@@ -82,19 +87,12 @@ public:
 	int segmentIndex() const {return _segmentIndex;}
 	bool valid() const {return (_periodIndex >= 0 && _adaptationSetIndex >= 0 && _bitRate >= 0 && _segmentIndex >= 0);}
 
-	bool operator<(const ContentIdSegment& other) const {
-		if(_periodIndex < other._periodIndex) return true;
-		if(_periodIndex > other._periodIndex) return false;
-		if(_adaptationSetIndex < other._adaptationSetIndex) return true;
-		if(_adaptationSetIndex > other._adaptationSetIndex) return false;
-		if(_bitRate < other._bitRate) return true;
-		if(_bitRate > other._bitRate) return false;
-		if(_segmentIndex < other._segmentIndex) return true;
-		return false;
-	}
-	bool operator==(const ContentId& other) const {if(other.getType() == ContentType_Segment) return operator==(dynamic_cast<const ContentIdSegment&>(other)); else return false;}
-	//bool operator!=(const ContentId& other) const {return !operator==(other);}
-	bool operator==(const ContentIdSegment& other) const {return (_periodIndex == other._periodIndex && _adaptationSetIndex == other._adaptationSetIndex && _bitRate == other._bitRate && _segmentIndex == other._segmentIndex);}
+	virtual bool operator==(const ContentId& other) const;
+	virtual bool operator==(const ContentIdSegment& other) const;
+	virtual bool operator!=(const ContentId& other) const {return ! operator==(other);}
+	virtual bool operator!=(const ContentIdSegment& other) const {return ! operator==(other);}
+	virtual bool operator<(const ContentId& contentId) const;
+	virtual bool operator<(const ContentIdSegment& other) const;
 
 private:
 	int _periodIndex;

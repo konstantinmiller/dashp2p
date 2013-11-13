@@ -35,6 +35,7 @@ namespace dashp2p {
 
 SegmentStorage::MpdMap SegmentStorage::mpdMap;
 SegmentStorage::SegMap SegmentStorage::segMap;
+mutex SegmentStorage::_mutex;
 
 string StreamPosition::toString() const
 {
@@ -59,58 +60,73 @@ SegmentStorage::~SegmentStorage()
 }
 #endif
 
+void SegmentStorage::init()
+{
+    // intentionally left blank
+}
+
 void SegmentStorage::cleanup()
 {
+    std::unique_lock<mutex> lock(_mutex);
     /* Delete the segment map and free storage */
-    while(!segMap.empty()) {
-        delete segMap.begin()->second;
-        segMap.erase(segMap.begin());
-    }
     while(!mpdMap.empty()) {
         delete mpdMap.begin()->second;
         mpdMap.erase(mpdMap.begin());
     }
-}
-
-bool SegmentStorage::initialized(ContentIdSegment segId)
-{
-    return (segMap.count(segId) > 0);
-}
-
-void SegmentStorage::initSegment(ContentIdSegment segId, int64_t numBytes, int64_t duration)
-{
-    DashSegment* dashSegment = new DashSegment(segId, numBytes, duration);
-    dp2p_assert(segMap.insert(pair<ContentIdSegment, DashSegment*>(segId, dashSegment)).second);
-}
-
-void SegmentStorage::setSize(const ContentId& segId, int64_t numBytes)
-{
-    switch(segId.getType()) {
-    case ContentType_Mpd:
-        mpdMap.at(dynamic_cast<ContentIdMpd&>(segId))->setSize(numBytes);
-        break;
-    case ContentType_Segment:
-        segMap.at(dynamic_cast<ContentIdSegment&>(segId))->setSize(numBytes);
-        break;
-    default:
-        THROW_RUNTIME("Unexpected ContentType: %d.", segId.getType());
+    while(!segMap.empty()) {
+        delete segMap.begin()->second;
+        segMap.erase(segMap.begin());
     }
 }
 
-void SegmentStorage::addData(const ContentId& segId, int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite)
+bool SegmentStorage::initialized(const ContentId& contentId)
 {
-    getSegment(segId).setData(byteFrom, byteTo, srcBuffer, overwrite);
+    std::unique_lock<mutex> lock(_mutex);
+    switch(contentId.getType()) {
+    case ContentType_Mpd: return (mpdMap.count(dynamic_cast<const ContentIdMpd&>(contentId)) > 0);
+    case ContentType_Segment: return (segMap.count(dynamic_cast<const ContentIdSegment&>(contentId)) > 0);
+    default: THROW_RUNTIME("Unknown segment type: %d.", contentId.getType());
+    }
+    abort(); // just to make gcc happy
+}
+
+void SegmentStorage::initSegment(const ContentIdMpd& contentIdMpd, int64_t numBytes)
+{
+    std::unique_lock<mutex> lock(_mutex);
+    DashObject* dashObject = new DashObject(contentIdMpd, numBytes);
+    dp2p_assert(mpdMap.insert(pair<const ContentIdMpd&, DashObject*>(contentIdMpd, dashObject)).second);
+}
+
+void SegmentStorage::initSegment(const ContentIdSegment& segId, int64_t numBytes, int64_t duration)
+{
+    std::unique_lock<mutex> lock(_mutex);
+    DashSegment* dashSegment = new DashSegment(segId, numBytes, duration);
+    dp2p_assert(segMap.insert(pair<const ContentIdSegment&, DashSegment*>(segId, dashSegment)).second);
+}
+
+void SegmentStorage::setSize(const ContentId& contentId, int64_t numBytes)
+{
+    std::unique_lock<mutex> lock(_mutex);
+    _get(contentId).setSize(numBytes);
+}
+
+void SegmentStorage::addData(const ContentId& contentId, int64_t byteFrom, int64_t byteTo, const char* srcBuffer, bool overwrite)
+{
+    std::unique_lock<mutex> lock(_mutex);
+    _get(contentId).setData(byteFrom, byteTo, srcBuffer, overwrite);
 }
 
 StreamPosition SegmentStorage::getData(StreamPosition startPos, Contour contour, char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned)
 {
-    if(bufferSize[0]) {
-        DBGMSG("Enter. Asked for up to %d bytes at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").", bufferSize[0], startPos.segId.bitRate(), startPos.segId.segmentIndex(), startPos.byte);
-    } else {
-        DBGMSG("Enter. Asked for all available bytes at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").", startPos.segId.bitRate(), startPos.segId.segmentIndex(), startPos.byte);
-    }
+    std::unique_lock<mutex> lock(_mutex);
+    if(bufferSize[0])
+        DBGMSG("Enter. Asked for up to %d bytes at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").",
+                bufferSize[0], startPos.segId.bitRate(), startPos.segId.segmentIndex(), startPos.byte);
+    else
+        DBGMSG("Enter. Asked for all available bytes at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").",
+                startPos.segId.bitRate(), startPos.segId.segmentIndex(), startPos.byte);
 
-    const pair<int64_t, int64_t> availableData = getContigInterval(startPos, contour);
+    const pair<int64_t, int64_t> availableData = _getContigInterval(startPos, contour);
     if(availableData.second == 0) {
         DBGMSG("No data available. Will return an invalid stream position.");
         return StreamPosition();
@@ -123,7 +139,8 @@ StreamPosition SegmentStorage::getData(StreamPosition startPos, Contour contour,
         buffer[0] = new char[bufferSize[0]];
     }
 
-    DBGMSG("Available: %" PRId64 " bytes, %" PRId64 " us. Will return %" PRId64 " bytes.", availableData.second, availableData.first, std::min<int64_t>(bufferSize[0], availableData.second));
+    DBGMSG("Available: %" PRId64 " bytes, %" PRId64 " us. Will return %" PRId64 " bytes.",
+            availableData.second, availableData.first, std::min<int64_t>(bufferSize[0], availableData.second));
 
     bytesReturned[0] = 0;
     usecReturned[0] = 0;
@@ -131,14 +148,16 @@ StreamPosition SegmentStorage::getData(StreamPosition startPos, Contour contour,
     StreamPosition nextByte2Copy = startPos;
     while(bytesReturned[0] < std::min<int64_t>(bufferSize[0], availableData.second))
     {
-        DashSegment& seg = getSegment(nextByte2Copy.segId);
-        const pair<int64_t, int64_t> copiedData = seg.getData(nextByte2Copy.byte, buffer[0] + bytesReturned[0], bufferSize[0] - bytesReturned[0]);
-        dp2p_assert(copiedData.second > 0);
-        bytesReturned[0] += copiedData.second;
-        usecReturned[0] += (copiedData.second * seg.getTotalDuration()) / seg.getTotalSize();
-        DBGMSG("Copied %" PRId64 " bytes, %" PRId64 " us from position (RegId: %d, SegNr: %d, offset: %" PRId64 ").", copiedData.second, copiedData.first, nextByte2Copy.segId.bitRate(), nextByte2Copy.segId.segmentIndex(), nextByte2Copy.byte);
+        DashSegment& seg = _get(nextByte2Copy.segId);
+        const int64_t bytes = seg.getData(nextByte2Copy.byte, buffer[0] + bytesReturned[0], bufferSize[0] - bytesReturned[0]);
+        dp2p_assert(bytes > 0);
+        const int64_t usec = bytes * seg.duration / seg.getTotalSize();
+        bytesReturned[0] += bytes;
+        usecReturned[0] += usec;
+        DBGMSG("Copied %" PRId64 " bytes, %" PRId64 " us from position (RegId: %d, SegNr: %d, offset: %" PRId64 ").",
+                bytes, usec, nextByte2Copy.segId.bitRate(), nextByte2Copy.segId.segmentIndex(), nextByte2Copy.byte);
         lastCopiedByte.segId = nextByte2Copy.segId;
-        lastCopiedByte.byte = nextByte2Copy.byte + copiedData.second - 1;
+        lastCopiedByte.byte = nextByte2Copy.byte + bytes - 1;
         if(lastCopiedByte.byte == seg.getTotalSize() - 1)
         {
             if(contour.hasNext(nextByte2Copy.segId)) {
@@ -221,9 +240,11 @@ StreamPosition SegmentStorage::getData(StreamPosition startPos, Contour contour,
 StreamPosition SegmentStorage::getSegmentData(StreamPosition startPos, char** buffer, int* bufferSize, int* bytesReturned, int64_t* usecReturned)
 {
 	if(bufferSize[0]) {
-		DBGMSG("Enter. Asked for up to %d bytes within a single segment at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").", bufferSize[0], startPos.segId.bitRate(), startPos.segId.segmentIndex(), startPos.byte);
+		DBGMSG("Enter. Asked for up to %d bytes within a single segment at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").",
+		        bufferSize[0], startPos.segId.bitRate(), startPos.segId.segmentIndex(), startPos.byte);
 	} else {
-		DBGMSG("Enter. Asked for all available bytes within a single segment at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").", startPos.segId.bitRate(), startPos.segId.segmentIndex(), startPos.byte);
+		DBGMSG("Enter. Asked for all available bytes within a single segment at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").",
+		        startPos.segId.bitRate(), startPos.segId.segmentIndex(), startPos.byte);
 	}
 
 	Contour contour;
@@ -232,52 +253,122 @@ StreamPosition SegmentStorage::getSegmentData(StreamPosition startPos, char** bu
 	return getData(startPos, contour, buffer, bufferSize, bytesReturned, usecReturned);
 }
 
-int64_t SegmentStorage::getTotalSize(ContentIdSegment segId)
+int64_t SegmentStorage::getTotalSize(const ContentId& contentId)
 {
-    return getSegment(segId).getTotalSize();
+    std::unique_lock<mutex> lock(_mutex);
+    return _get(contentId).getTotalSize();
 }
 
-int64_t SegmentStorage::getTotalDuration(ContentIdSegment segId)
+/*int64_t SegmentStorage::getTotalDuration(ContentIdSegment segId)
 {
-    return getSegment(segId).getTotalDuration();
+    std::unique_lock<mutex> lock(_mutex);
+    return _getSegment(segId).duration;
+}*/
+
+DashObject& SegmentStorage::get(const ContentId& contentId)
+{
+    std::unique_lock<mutex> lock(_mutex);
+    return _get(contentId);
 }
 
-DashSegment& SegmentStorage::getSegment(const ContentId& segId)
+DashSegment& SegmentStorage::get(const ContentIdSegment& segId)
 {
-    switch(segId.getType()) {
-    case ContentType_Mpd:
-    {
-        SegMap::const_iterator it = mpdMap.find(dynamic_cast<ContentIdMpd&>(segId));
-        if(it == mpdMap.end())
-            THROW_RUNTIME("Can't find segment %s. Probably a bug.", segId.toString().c_str());
-        return *it->second;
-    }
-    case ContentType_Segment:
-    {
-        SegMap::const_iterator it = segMap.find(dynamic_cast<ContentIdSegment&>(segId));
-        if(it == segMap.end())
-            THROW_RUNTIME("Can't find segment %s. Probably a bug.", segId.toString().c_str());
-        return *it->second;
-    }
-    default:
-        THROW_RUNTIME("Unexpected ContentType: %d.", segId.getType());
-    }
+    std::unique_lock<mutex> lock(_mutex);
+    return _get(segId);
 }
 
 pair<int64_t, int64_t> SegmentStorage::getContigInterval(StreamPosition strPos, Contour contour)
 {
+    std::unique_lock<mutex> lock(_mutex);
+    return _getContigInterval(strPos, contour);
+}
+
+bool SegmentStorage::dataAvailable(StreamPosition strPos)
+{
+    std::unique_lock<mutex> lock(_mutex);
+    return _get(strPos.segId).hasData(strPos.byte);
+}
+
+#if 0
+string SegmentStorage::printDownloadedData(int startSegNr, int64_t offset)
+{
+    std::unique_lock<mutex> lock(_mutex);
+    string ret;
+    ret.reserve(2048);
+    for(ObjMap::const_iterator it = objMap.begin(); it != objMap.end(); ++it)
+    {
+        const ContentId& contentId = *it->first;
+        DashSegment& seg = *it->second;
+        if(segId.segmentIndex() < startSegNr)
+            continue;
+        const string segData = (segId.segmentIndex() == startSegNr) ? seg.printDownloadedData(offset) : seg.printDownloadedData(0);
+        if(!segData.empty()) {
+            char tmp[1024];
+            sprintf(tmp, "(%d,%d,%" PRId64 "): ", segId.bitRate(), segId.segmentIndex(), offset);
+            ret.append(tmp);
+            ret.append(segData);
+            ret.append("\n");
+        }
+    }
+    return ret;
+}
+#endif
+
+void SegmentStorage::toFile (const ContentId& contentId, string& fileName)
+{
+    std::unique_lock<mutex> lock(_mutex);
+	_get(contentId).toFile(fileName);
+}
+
+/*
+ * Private methods
+ */
+#if 0
+DashSegment& SegmentStorage::getSegment(ContentIdSegment segId)
+{
+    DBGMSG("Enter. Asking for segment (RepId: %d, SegNr: %d).", segId.bitRate(), segId.segmentIndex());
+    SegMap::iterator it = segMap.find(segId);
+    dp2p_assert(it != segMap.end());
+    DashSegment* seg = it->second;
+    return *seg;
+}
+#endif
+
+DashObject& SegmentStorage::_get(const ContentId& contentId)
+{
+    // must not lock mutex, must be locked before calling
+    switch(contentId.getType()) {
+    case ContentType_Mpd:
+        return *mpdMap.at(dynamic_cast<const ContentIdMpd&>(contentId));
+    case ContentType_Segment:
+        return *segMap.at(dynamic_cast<const ContentIdSegment&>(contentId));
+    default:
+        THROW_RUNTIME("Unexpected ContentType: %d.", contentId.getType());
+    }
+    abort(); // just to make gcc happy
+}
+
+DashSegment& SegmentStorage::_get(const ContentIdSegment& contentId)
+{
+    // must not lock mutex, must be locked before calling
+    return *segMap.at(dynamic_cast<const ContentIdSegment&>(contentId));
+}
+
+pair<int64_t, int64_t> SegmentStorage::_getContigInterval(StreamPosition strPos, Contour contour)
+{
     pair<int64_t, int64_t> availableData(0, 0);
 
-    DBGMSG("Asking for contiguous interval at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").", strPos.segId.bitRate(), strPos.segId.segmentIndex(), strPos.byte);
+    DBGMSG("Asking for contiguous interval at position (RepId: %d, SegNr: %d, offset: %" PRId64 ").",
+            strPos.segId.bitRate(), strPos.segId.segmentIndex(), strPos.byte);
 
     /* If the given position is invalid, return 0 */
     if(!strPos.valid())
         return availableData;
 
-    while(dataAvailable(strPos))
+    while(_dataAvailable(strPos))
     {
         //DBGMSG("Checking (RepId: %d, SegNr: %d, offset: %"PRId64").", strPos.segId.repId(), strPos.segId.segNr(), strPos.byte);
-        DashSegment& seg = getSegment(strPos.segId);
+        DashSegment& seg = _get(strPos.segId);
         pair<int64_t, int64_t> _availableData = seg.getContigInterval(strPos.byte);
         //DBGMSG("Available: %"PRId64" us, %"PRId64" byte. Total segment size: %"PRId64".", _availableData.first, _availableData.second, seg.getTotalSize());
         availableData.first += _availableData.first;
@@ -298,54 +389,13 @@ pair<int64_t, int64_t> SegmentStorage::getContigInterval(StreamPosition strPos, 
     return availableData;
 }
 
-bool SegmentStorage::dataAvailable(StreamPosition strPos)
+bool SegmentStorage::_dataAvailable(StreamPosition strPos)
 {
-    SegMap::const_iterator it = segMap.find(strPos.segId);
+    const SegMap::const_iterator it = segMap.find(strPos.segId);
     if(it == segMap.end())
         return false;
-    return it->second->hasData(strPos.byte);
+    else
+        return it->second->hasData(strPos.byte);
 }
-
-string SegmentStorage::printDownloadedData(int startSegNr, int64_t offset)
-{
-    string ret;
-    ret.reserve(2048);
-    for(SegMap::const_iterator it = segMap.begin(); it != segMap.end(); ++it)
-    {
-        const ContentIdSegment& segId = it->first;
-        DashSegment& seg = *it->second;
-        if(segId.segmentIndex() < startSegNr)
-            continue;
-        const string segData = (segId.segmentIndex() == startSegNr) ? seg.printDownloadedData(offset) : seg.printDownloadedData(0);
-        if(!segData.empty()) {
-            char tmp[1024];
-            sprintf(tmp, "(%d,%d,%" PRId64 "): ", segId.bitRate(), segId.segmentIndex(), offset);
-            ret.append(tmp);
-            ret.append(segData);
-            ret.append("\n");
-        }
-    }
-    return ret;
-}
-
-void SegmentStorage::toFile (ContentIdSegment segId, string& fileName)
-{
-	DashSegment& ds = getSegment(segId);
-	ds.toFile(fileName);
-}
-
-/*
- * Private methods
- */
-#if 0
-DashSegment& SegmentStorage::getSegment(ContentIdSegment segId)
-{
-    DBGMSG("Enter. Asking for segment (RepId: %d, SegNr: %d).", segId.bitRate(), segId.segmentIndex());
-    SegMap::iterator it = segMap.find(segId);
-    dp2p_assert(it != segMap.end());
-    DashSegment* seg = it->second;
-    return *seg;
-}
-#endif
 
 }

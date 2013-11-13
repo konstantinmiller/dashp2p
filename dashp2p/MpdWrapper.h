@@ -52,7 +52,8 @@ public:
 	 * @param p     Pointer to memory holding the MPD file. Will be deleted within this function.
 	 * @param size  Size of the MPD file.
 	 */
-    static void init(char* p, int size);
+    //static void init(char* p, int size);
+    static void init(const ContentIdMpd& contentIdMpd);
     static void cleanup() {delete mpd;}
     static bool hasMpd() {return mpd != nullptr;}
 
