@@ -754,7 +754,8 @@ void Control::httpDataReceived_Segment(HttpEventDataReceived& e)
 #endif
 
 	DBGMSG("Calculating contig interval.");
-	const pair<int64_t, int64_t> availableContigInterval = SegmentStorage::getContigInterval(getNextPosition(), controlLogic->getContour());
+	const pair<int64_t, int64_t> availableContigInterval =
+	        SegmentStorage::getContigInterval(getNextPosition(), controlLogic->getContour());
 
 	DBGMSG("Have %" PRId64 " bytes (%" PRId64 " us) of contiguous data in the storage.", availableContigInterval.second, availableContigInterval.first);
 
@@ -938,7 +939,8 @@ int Control::vlcCb(char** buffer, int* bufferSize, int* bytesReturned, int64_t* 
     }*/
 
     const pair<int64_t, int64_t> contigIntervalPre = SegmentStorage::getContigInterval(getNextPosition(), controlLogic->getContour());
-    DBGMSG("We passed startTime and %" PRId64 " bytes (%" PRId64 " us) are available starting from (RepId: %d, SegNr: %d, offset: %" PRId64 ").", contigIntervalPre.second, contigIntervalPre.first, curPos.segId.bitRate(), curPos.segId.segmentIndex(), curPos.byte);
+    DBGMSG("We passed startTime and %" PRId64 " bytes (%" PRId64 " us) are available starting from (RepId: %d, SegNr: %d, offset: %" PRId64 ").",
+            contigIntervalPre.second, contigIntervalPre.first, curPos.segId.bitRate(), curPos.segId.segmentIndex(), curPos.byte);
 
     // TODO: this should be somewhere else for cleaner style
     //if(!curPos.valid()) {

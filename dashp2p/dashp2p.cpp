@@ -30,6 +30,8 @@
 #include <cassert>
 #include <string>
 #include <cstdarg>
+#include <execinfo.h>
+#include <iostream>
 
 #include <vlc_common.h>
 #include <vlc_plugin.h>
@@ -110,6 +112,21 @@ vlc_module_begin()
 
 vlc_module_end ()
 
+void std_terminate()
+{
+    void *trace_elems[20];
+    int trace_elem_count = backtrace( trace_elems, 20 );
+    backtrace_symbols_fd(trace_elems, trace_elem_count, STDERR_FILENO);
+    /*char **stack_syms(backtrace_symbols( trace_elems, trace_elem_count ));
+    for ( int i = 0 ; i < trace_elem_count ; ++i )
+    {
+        std::cout << stack_syms[i] << "\n";
+    }
+    free( stack_syms );*/
+    abort();
+    //std::rethrow_exception(std::current_exception());
+}
+
 /*****************************************************************************
  * Open: initialize interface
  *****************************************************************************/
@@ -131,6 +148,8 @@ static int Open( vlc_object_t *p_this )
     } else {
         msg_Info( p_this, "MPEG-DASH MPD file extension detected. dashp2p plugin takes over. (Compiled on " __DATE__ ", at " __TIME__ ".)" );
     }
+
+    std::set_terminate(std_terminate);
 
     /* Input parameters */
     const string mpdUrl                 = p_access->psz_location;

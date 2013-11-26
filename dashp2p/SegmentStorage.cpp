@@ -286,7 +286,11 @@ pair<int64_t, int64_t> SegmentStorage::getContigInterval(StreamPosition strPos, 
 bool SegmentStorage::dataAvailable(StreamPosition strPos)
 {
     std::unique_lock<mutex> lock(_mutex);
-    return _get(strPos.segId).hasData(strPos.byte);
+    try {
+        return _get(strPos.segId).hasData(strPos.byte);
+    } catch (const std::out_of_range& e) {
+        return false;
+    }
 }
 
 #if 0
