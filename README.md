@@ -1,3 +1,6 @@
+### WARNING: This code is potentially outdated and no longer maintained.
+
+
 dashp2p - MPEG-DASH plugin for VLC
 =======
 
